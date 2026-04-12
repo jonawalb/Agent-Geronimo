@@ -1,0 +1,326 @@
+# Agent Geronimo - Source Registry
+# Each source has a type, URL pattern, parser class, and priority
+
+federal_apis:
+  grants_gov:
+    name: "Grants.gov"
+    type: api
+    base_url: "https://api.grants.gov/v1/api"
+    search_url: "https://api.grants.gov/v1/api/search"
+    detail_url: "https://api.grants.gov/v1/api/listing"
+    parser: grants_gov
+    priority: 1
+    enabled: true
+    rate_limit: 2  # requests per second
+    notes: "Primary federal grant database. No API key needed for basic search."
+
+  sam_gov:
+    name: "SAM.gov Contract Opportunities"
+    type: api
+    base_url: "https://api.sam.gov/prod/opportunities/v2/search"
+    parser: sam_gov
+    priority: 1
+    enabled: true
+    requires_key: true
+    key_env: SAM_GOV_API_KEY
+    rate_limit: 1
+    notes: "Federal contract opportunities. Free API key from api.sam.gov"
+
+  usaspending:
+    name: "USAspending.gov"
+    type: api
+    base_url: "https://api.usaspending.gov/api/v2"
+    parser: usaspending
+    priority: 2
+    enabled: true
+    notes: "Past award data for funder intelligence. Public API, no key needed."
+
+federal_websites:
+  darpa:
+    name: "DARPA"
+    type: web_scrape
+    urls:
+      - "https://www.darpa.mil/work-with-us/opportunities"
+      - "https://sam.gov/search/?index=opp&sort=-modifiedDate&page=1&pageSize=25&sfm%5Bstatus%5D%5Bis_active%5D=true&sfm%5BsimpleSearch%5D%5BkeywordRadio%5D=ALL&sfm%5BsimpleSearch%5D%5BkeywordTags%5D%5B0%5D%5Bkey%5D=DARPA"
+    parser: darpa
+    priority: 1
+    enabled: true
+
+  iarpa:
+    name: "IARPA"
+    type: web_scrape
+    urls:
+      - "https://www.iarpa.gov/research-programs"
+    parser: generic_agency
+    priority: 1
+    enabled: true
+
+  onr:
+    name: "Office of Naval Research"
+    type: web_scrape
+    urls:
+      - "https://www.nre.navy.mil/work-with-us/funding-opportunities"
+    parser: generic_agency
+    priority: 1
+    enabled: true
+
+  afosr:
+    name: "Air Force Office of Scientific Research"
+    type: web_scrape
+    urls:
+      - "https://www.afrl.af.mil/AFRLHorizons/AFOSR/"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+
+  aro:
+    name: "Army Research Office"
+    type: web_scrape
+    urls:
+      - "https://www.arl.army.mil/opportunities/"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+
+  dtra:
+    name: "Defense Threat Reduction Agency"
+    type: web_scrape
+    urls:
+      - "https://www.dtra.mil/Opportunities/"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+
+  diu:
+    name: "Defense Innovation Unit"
+    type: web_scrape
+    urls:
+      - "https://www.diu.mil/work-with-us"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+
+  dhs:
+    name: "Department of Homeland Security"
+    type: web_scrape
+    urls:
+      - "https://www.dhs.gov/science-and-technology/grants-and-funding"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+
+  state_dept:
+    name: "State Department"
+    type: web_scrape
+    urls:
+      - "https://www.state.gov/bureau-of-democracy-human-rights-and-labor/"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+
+  ned:
+    name: "National Endowment for Democracy"
+    type: web_scrape
+    urls:
+      - "https://www.ned.org/apply-for-grant/"
+    parser: generic_agency
+    priority: 1
+    enabled: true
+
+  nsf:
+    name: "National Science Foundation"
+    type: web_scrape
+    urls:
+      - "https://www.nsf.gov/funding/"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+
+  minerva:
+    name: "Minerva Research Initiative"
+    type: web_scrape
+    urls:
+      - "https://minerva.defense.gov/"
+    parser: generic_agency
+    priority: 1
+    enabled: true
+    notes: "DoD social science research. High relevance for security studies."
+
+  sbir:
+    name: "SBIR/STTR"
+    type: web_scrape
+    urls:
+      - "https://www.sbir.gov/solicitations/open"
+    parser: generic_agency
+    priority: 3
+    enabled: true
+
+  challenge_gov:
+    name: "Challenge.gov"
+    type: web_scrape
+    urls:
+      - "https://www.challenge.gov/"
+    parser: generic_agency
+    priority: 3
+    enabled: true
+
+foundations:
+  smith_richardson:
+    name: "Smith Richardson Foundation"
+    type: web_scrape
+    urls:
+      - "https://www.srf.org/programs/"
+    parser: foundation
+    priority: 1
+    enabled: true
+    notes: "Strong funder of security studies and strategic research."
+
+  carnegie:
+    name: "Carnegie Corporation of New York"
+    type: web_scrape
+    urls:
+      - "https://www.carnegie.org/grants/"
+    parser: foundation
+    priority: 1
+    enabled: true
+
+  macarthur:
+    name: "MacArthur Foundation"
+    type: web_scrape
+    urls:
+      - "https://www.macfound.org/grants"
+    parser: foundation
+    priority: 2
+    enabled: true
+
+  ford:
+    name: "Ford Foundation"
+    type: web_scrape
+    urls:
+      - "https://www.fordfoundation.org/work/our-grants/"
+    parser: foundation
+    priority: 3
+    enabled: true
+
+  hewlett:
+    name: "Hewlett Foundation"
+    type: web_scrape
+    urls:
+      - "https://hewlett.org/grants/"
+    parser: foundation
+    priority: 3
+    enabled: true
+
+  luce:
+    name: "Henry Luce Foundation"
+    type: web_scrape
+    urls:
+      - "https://www.hluce.org/programs/"
+    parser: foundation
+    priority: 1
+    enabled: true
+    notes: "Strong Asia focus. High relevance for Indo-Pacific work."
+
+  open_society:
+    name: "Open Society Foundations"
+    type: web_scrape
+    urls:
+      - "https://www.opensocietyfoundations.org/grants"
+    parser: foundation
+    priority: 2
+    enabled: true
+
+  rockefeller:
+    name: "Rockefeller Foundation"
+    type: web_scrape
+    urls:
+      - "https://www.rockefellerfoundation.org/"
+    parser: foundation
+    priority: 3
+    enabled: true
+
+  stanton:
+    name: "Stanton Foundation"
+    type: web_scrape
+    urls:
+      - "https://www.stantonfoundation.org/"
+    parser: foundation
+    priority: 2
+    enabled: true
+    notes: "Nuclear policy and security fellows. Relevant for deterrence work."
+
+  ploughshares:
+    name: "Ploughshares Fund"
+    type: web_scrape
+    urls:
+      - "https://ploughshares.org/what-we-fund"
+    parser: foundation
+    priority: 2
+    enabled: true
+
+  korea_foundation:
+    name: "Korea Foundation"
+    type: web_scrape
+    urls:
+      - "https://en.kf.or.kr/"
+    parser: foundation
+    priority: 3
+    enabled: true
+
+  japan_foundation:
+    name: "Japan Foundation"
+    type: web_scrape
+    urls:
+      - "https://www.jpf.go.jp/e/project/intel/exchange/"
+    parser: foundation
+    priority: 3
+    enabled: true
+
+  taipei_economic_cultural:
+    name: "TECRO / Taiwan-Related Foundations"
+    type: web_scrape
+    urls:
+      - "https://www.roc-taiwan.org/"
+    parser: foundation
+    priority: 2
+    enabled: true
+
+rss_feeds:
+  grants_gov_rss:
+    name: "Grants.gov RSS"
+    type: rss
+    url: "https://www.grants.gov/rss/GG_NewOppByCategory.xml"
+    parser: rss
+    priority: 2
+    enabled: true
+
+  sam_gov_rss:
+    name: "SAM.gov RSS"
+    type: rss
+    url: "https://sam.gov/api/prod/opps/v1/rss"
+    parser: rss
+    priority: 2
+    enabled: false
+    notes: "May require specific parameters"
+
+web_search:
+  google_search:
+    name: "Google Custom Search"
+    type: web_search
+    enabled: true
+    priority: 2
+    notes: "Fallback for sources without APIs. Uses Google CSE if key available, otherwise web search tool."
+
+  targeted_searches:
+    name: "Targeted Web Searches"
+    type: web_search
+    enabled: true
+    priority: 2
+    search_templates:
+      - "{keyword} funding opportunity 2025 2026"
+      - "{keyword} grant call for proposals"
+      - "{keyword} BAA broad agency announcement"
+      - "{keyword} research funding university center"
+      - "site:grants.gov {keyword}"
+      - "site:sam.gov {keyword}"
+      - "{keyword} foundation grant security policy"

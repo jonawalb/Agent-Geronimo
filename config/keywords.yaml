@@ -1,0 +1,214 @@
+# Agent Geronimo - Keyword Configuration
+# Organized by category for multi-dimensional search
+
+# Primary search terms - used across all sources
+primary_keywords:
+  security_defense:
+    - national security
+    - security studies
+    - strategic studies
+    - defense analysis
+    - defense research
+    - military affairs
+    - defense policy
+    - defense innovation
+    - military technology
+    - defense strategy
+
+  deterrence_competition:
+    - deterrence
+    - strategic competition
+    - great power competition
+    - strategic rivalry
+    - power projection
+    - coercive diplomacy
+    - escalation dynamics
+    - arms control
+    - nuclear strategy
+    - alliance management
+
+  intelligence_osint:
+    - intelligence analysis
+    - open source intelligence
+    - OSINT
+    - GEOINT
+    - geospatial intelligence
+    - signals intelligence
+    - intelligence studies
+    - intelligence community
+    - strategic warning
+    - early warning
+    - indications and warning
+
+  information_warfare:
+    - information warfare
+    - information operations
+    - influence operations
+    - disinformation
+    - misinformation
+    - narrative warfare
+    - cognitive warfare
+    - psychological operations
+    - propaganda analysis
+    - strategic communications
+    - media manipulation
+    - foreign influence
+    - computational propaganda
+
+  indo_pacific:
+    - Indo-Pacific
+    - Taiwan
+    - Taiwan Strait
+    - cross-strait
+    - China security
+    - PRC military
+    - PLA
+    - East Asia security
+    - Asia Pacific
+    - South China Sea
+    - Pacific deterrence
+    - Indo-Pacific strategy
+
+  cyber_tech:
+    - cybersecurity
+    - cyber operations
+    - technology and security
+    - emerging technology
+    - critical infrastructure
+    - technology competition
+    - tech policy
+    - artificial intelligence security
+    - AI and national security
+    - autonomous systems
+
+  resilience_democracy:
+    - democratic resilience
+    - societal resilience
+    - institutional resilience
+    - democracy and security
+    - governance and security
+    - democratic backsliding
+    - authoritarian influence
+    - sharp power
+
+  policy_analysis:
+    - foreign policy analysis
+    - policy research
+    - public policy
+    - security governance
+    - conflict analysis
+    - regional stability
+    - geopolitical risk
+    - data-driven policy
+    - evidence-based policy
+    - decision support
+
+  wargaming_simulation:
+    - wargaming
+    - simulation
+    - tabletop exercise
+    - scenario planning
+    - red teaming
+    - net assessment
+    - force planning
+
+  hybrid_gray_zone:
+    - gray zone
+    - hybrid threats
+    - hybrid warfare
+    - irregular warfare
+    - unconventional warfare
+    - sub-threshold operations
+    - political warfare
+
+# Funder-side language - used when searching funding portals
+funder_terms:
+  - broad agency announcement
+  - BAA
+  - call for proposals
+  - notice of funding opportunity
+  - NOFO
+  - grant opportunity
+  - solicitation
+  - request for proposals
+  - RFP
+  - request for information
+  - RFI
+  - research funding
+  - center funding
+  - cooperative agreement
+  - assistance listing
+  - sponsored research
+  - think tank funding
+  - policy research support
+  - challenge competition
+  - prize competition
+  - fellowship program
+  - research grant
+  - capacity building
+
+# Combined search queries - pre-built for common API searches
+search_queries:
+  grants_gov:
+    - national security research
+    - defense analysis
+    - Indo-Pacific security
+    - information warfare research
+    - strategic competition
+    - cybersecurity research
+    - intelligence analysis
+    - democratic resilience
+    - foreign policy research
+    - deterrence studies
+    - Taiwan security
+    - cognitive warfare
+    - OSINT research
+    - wargaming
+    - disinformation
+    - geopolitical risk
+    - hybrid threats
+    - defense innovation
+    - security studies
+    - policy research center
+    - emerging technology security
+    - conflict analysis
+    - China studies
+    - narrative analysis
+    - strategic communications
+    - public opinion conflict
+    - military affairs
+    - technology policy
+    - critical infrastructure protection
+    - great power competition
+
+  sam_gov:
+    - security analysis
+    - defense research services
+    - intelligence support
+    - information operations
+    - strategic analysis
+    - Indo-Pacific
+    - cybersecurity services
+    - policy analysis
+    - wargaming services
+    - OSINT
+    - geospatial analysis
+    - Taiwan
+    - threat assessment
+    - resilience
+    - cognitive warfare
+
+  foundation:
+    - security policy research
+    - democracy governance
+    - foreign policy
+    - technology policy
+    - media literacy
+    - disinformation counter
+    - Asia policy
+    - peace security
+    - international affairs
+    - civic resilience
+    - global governance
+    - authoritarianism
+    - public interest technology

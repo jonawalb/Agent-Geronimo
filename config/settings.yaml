@@ -1,0 +1,52 @@
+# Agent Geronimo - General Settings
+
+output:
+  directory: "~/agent-geronimo/output"
+  filename_template: "Agent_Geronimo_Funding_Results_{date}.xlsx"
+  also_export_csv: true
+  also_export_json: true
+  also_export_markdown: true
+
+cache:
+  enabled: true
+  database: "~/agent-geronimo/cache/geronimo_cache.db"
+  ttl_hours: 24
+
+scraping:
+  max_concurrent_requests: 5
+  request_timeout: 30
+  retry_attempts: 3
+  retry_delay: 2
+  rate_limit_per_second: 2
+  user_agent: "AgentGeronimo/1.0 (Academic Research Funding Discovery)"
+  respect_robots_txt: true
+
+scoring:
+  tsm_weight: 0.35
+  gmu_center_weight: 0.35
+  general_security_weight: 0.30
+  min_relevance_threshold: 15
+
+local_context:
+  tsm_path: "~/Desktop/TSM!!!"
+  grants_path: "~/Desktop/Grants"
+  tsm_website: "https://taiwansecuritymonitor.org"
+  scan_extensions:
+    - .docx
+    - .pdf
+    - .md
+    - .txt
+    - .pptx
+    - .xlsx
+    - .csv
+
+deduplication:
+  title_similarity_threshold: 85
+  use_fuzzy_matching: true
+
+excel:
+  freeze_panes: true
+  auto_filter: true
+  color_code_priority: true
+  wrap_text: true
+  max_column_width: 60
