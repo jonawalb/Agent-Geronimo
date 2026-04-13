@@ -24,7 +24,9 @@ federal_apis:
     requires_key: true
     key_env: SAM_GOV_API_KEY
     rate_limit: 1
-    notes: "Federal contract opportunities. Free API key from api.sam.gov"
+    notes: >
+      Federal contract opportunities. Free API key from api.sam.gov.
+      Enhanced: pagination, agency-specific searches, award/closed filtering.
 
   usaspending:
     name: "USAspending.gov"
@@ -70,7 +72,7 @@ federal_websites:
     urls:
       - "https://www.afrl.af.mil/AFRLHorizons/AFOSR/"
     parser: generic_agency
-    priority: 2
+    priority: 1
     enabled: true
 
   aro:
@@ -79,7 +81,7 @@ federal_websites:
     urls:
       - "https://www.arl.army.mil/opportunities/"
     parser: generic_agency
-    priority: 2
+    priority: 1
     enabled: true
 
   dtra:
@@ -88,8 +90,9 @@ federal_websites:
     urls:
       - "https://www.dtra.mil/Opportunities/"
     parser: generic_agency
-    priority: 2
+    priority: 1
     enabled: true
+    notes: "DTRA funds CWMD, nuclear/radiological defense, and strategic stability research."
 
   diu:
     name: "Defense Innovation Unit"
@@ -97,8 +100,36 @@ federal_websites:
     urls:
       - "https://www.diu.mil/work-with-us"
     parser: generic_agency
+    priority: 1
+    enabled: true
+
+  marine_corps:
+    name: "Marine Corps Warfighting Lab"
+    type: web_scrape
+    urls:
+      - "https://www.mcwl.marines.mil/"
+    parser: generic_agency
     priority: 2
     enabled: true
+
+  socom:
+    name: "US Special Operations Command"
+    type: web_scrape
+    urls:
+      - "https://www.socom.mil/pages/small-business.aspx"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+
+  osd_net_assessment:
+    name: "Office of Net Assessment / OSD"
+    type: web_scrape
+    urls:
+      - "https://policy.defense.gov/"
+    parser: generic_agency
+    priority: 1
+    enabled: true
+    notes: "ONA rarely posts publicly but occasionally through SAM.gov. Checked via SAM API."
 
   dhs:
     name: "Department of Homeland Security"
@@ -114,8 +145,9 @@ federal_websites:
     type: web_scrape
     urls:
       - "https://www.state.gov/bureau-of-democracy-human-rights-and-labor/"
+      - "https://www.state.gov/bureaus-offices/under-secretary-for-political-affairs/bureau-of-intelligence-and-research/"
     parser: generic_agency
-    priority: 2
+    priority: 1
     enabled: true
 
   ned:
@@ -141,6 +173,7 @@ federal_websites:
     type: web_scrape
     urls:
       - "https://minerva.defense.gov/"
+      - "https://minerva.defense.gov/Research/Funding-Opportunities/"
     parser: generic_agency
     priority: 1
     enabled: true
@@ -164,12 +197,32 @@ federal_websites:
     priority: 3
     enabled: true
 
+  apl:
+    name: "Johns Hopkins Applied Physics Lab"
+    type: web_scrape
+    urls:
+      - "https://www.jhuapl.edu/work-with-us"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+    notes: "APL partners on defense research. Check for subcontracting/teaming opportunities."
+
+  usaid:
+    name: "USAID"
+    type: web_scrape
+    urls:
+      - "https://www.usaid.gov/work-usaid/find-a-funding-opportunity"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+
 foundations:
   smith_richardson:
     name: "Smith Richardson Foundation"
     type: web_scrape
     urls:
       - "https://www.srf.org/programs/"
+      - "https://www.srf.org/apply/"
     parser: foundation
     priority: 1
     enabled: true
@@ -258,6 +311,27 @@ foundations:
     priority: 2
     enabled: true
 
+  us_japan_foundation:
+    name: "US-Japan Foundation"
+    type: web_scrape
+    urls:
+      - "https://us-jf.org/programs/"
+      - "https://us-jf.org/grants/"
+    parser: foundation
+    priority: 1
+    enabled: true
+    notes: "Funds US-Japan policy, security, and exchange programs."
+
+  sasakawa_peace:
+    name: "Sasakawa Peace Foundation"
+    type: web_scrape
+    urls:
+      - "https://www.spf.org/en/grants/"
+    parser: foundation
+    priority: 2
+    enabled: true
+    notes: "Japan-based foundation supporting Indo-Pacific security research."
+
   korea_foundation:
     name: "Korea Foundation"
     type: web_scrape
@@ -285,6 +359,143 @@ foundations:
     priority: 2
     enabled: true
 
+  taiwan_foundation_democracy:
+    name: "Taiwan Foundation for Democracy"
+    type: web_scrape
+    urls:
+      - "https://www.tfd.org.tw/en/grants"
+    parser: foundation
+    priority: 1
+    enabled: true
+    notes: "Taiwan democracy promotion grants. High TSM relevance."
+
+  german_marshall_fund:
+    name: "German Marshall Fund"
+    type: web_scrape
+    urls:
+      - "https://www.gmfus.org/grants-fellowships"
+    parser: foundation
+    priority: 2
+    enabled: true
+    notes: "Transatlantic policy and security fellowships/grants."
+
+congressional_commissions:
+  uscc:
+    name: "US-China Economic and Security Review Commission"
+    type: web_scrape
+    urls:
+      - "https://www.uscc.gov/"
+      - "https://www.uscc.gov/research"
+    parser: generic_agency
+    priority: 1
+    enabled: true
+    notes: "Contracts out research reports on China security/economic topics. High relevance."
+
+  cecc:
+    name: "Congressional-Executive Commission on China"
+    type: web_scrape
+    urls:
+      - "https://www.cecc.gov/"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+
+  helsinki_commission:
+    name: "Helsinki Commission (CSCE)"
+    type: web_scrape
+    urls:
+      - "https://www.csce.gov/"
+    parser: generic_agency
+    priority: 3
+    enabled: true
+
+  tom_lantos:
+    name: "Tom Lantos Human Rights Commission"
+    type: web_scrape
+    urls:
+      - "https://humanrightscommission.house.gov/"
+    parser: generic_agency
+    priority: 3
+    enabled: true
+
+  eastwest_center:
+    name: "EastWest Center"
+    type: web_scrape
+    urls:
+      - "https://www.eastwestcenter.org/grants-and-fellowships"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+    notes: "Asia-Pacific research fellowships and grants."
+
+  nbr:
+    name: "National Bureau of Asian Research"
+    type: web_scrape
+    urls:
+      - "https://www.nbr.org/"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+
+think_tanks:
+  csis:
+    name: "CSIS"
+    type: web_scrape
+    urls:
+      - "https://www.csis.org/about-us/careers-internships"
+    parser: generic_agency
+    priority: 3
+    enabled: true
+    notes: "Fellowships and funded research positions."
+
+  cfr:
+    name: "Council on Foreign Relations"
+    type: web_scrape
+    urls:
+      - "https://www.cfr.org/fellowships"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+    notes: "International affairs fellowships. Open grant programs."
+
+  wilson_center:
+    name: "Wilson Center"
+    type: web_scrape
+    urls:
+      - "https://www.wilsoncenter.org/fellowships"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+    notes: "Research fellowships with actual funding."
+
+  atlantic_council:
+    name: "Atlantic Council"
+    type: web_scrape
+    urls:
+      - "https://www.atlanticcouncil.org/about/employment/"
+    parser: generic_agency
+    priority: 3
+    enabled: true
+
+  cnas:
+    name: "Center for a New American Security"
+    type: web_scrape
+    urls:
+      - "https://www.cnas.org/careers"
+    parser: generic_agency
+    priority: 3
+    enabled: true
+
+  project_2049:
+    name: "Project 2049 Institute"
+    type: web_scrape
+    urls:
+      - "https://project2049.net/"
+    parser: generic_agency
+    priority: 2
+    enabled: true
+    notes: "Taiwan/Indo-Pacific focused. Potential collaboration partner."
+
 rss_feeds:
   grants_gov_rss:
     name: "Grants.gov RSS"
@@ -309,7 +520,7 @@ web_search:
     type: web_search
     enabled: true
     priority: 2
-    notes: "Fallback for sources without APIs. Uses Google CSE if key available, otherwise web search tool."
+    notes: "Fallback for sources without APIs. Uses Google CSE if key available."
 
   targeted_searches:
     name: "Targeted Web Searches"
@@ -318,9 +529,11 @@ web_search:
     priority: 2
     search_templates:
       - "{keyword} funding opportunity 2025 2026"
-      - "{keyword} grant call for proposals"
-      - "{keyword} BAA broad agency announcement"
-      - "{keyword} research funding university center"
+      - "{keyword} grant call for proposals open"
+      - "{keyword} BAA broad agency announcement 2025"
+      - "{keyword} research funding university center 2025"
+      - "{keyword} fellowship application open 2025 2026"
       - "site:grants.gov {keyword}"
       - "site:sam.gov {keyword}"
       - "{keyword} foundation grant security policy"
+      - "{keyword} cooperative agreement NOFO 2025"

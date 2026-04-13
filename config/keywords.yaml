@@ -26,6 +26,8 @@ primary_keywords:
     - arms control
     - nuclear strategy
     - alliance management
+    - extended deterrence
+    - nuclear deterrence
 
   intelligence_osint:
     - intelligence analysis
@@ -68,6 +70,9 @@ primary_keywords:
     - South China Sea
     - Pacific deterrence
     - Indo-Pacific strategy
+    - Japan security
+    - US-Japan alliance
+    - US-Taiwan relations
 
   cyber_tech:
     - cybersecurity
@@ -80,6 +85,8 @@ primary_keywords:
     - artificial intelligence security
     - AI and national security
     - autonomous systems
+    - dual-use technology
+    - technology transfer
 
   resilience_democracy:
     - democratic resilience
@@ -121,6 +128,16 @@ primary_keywords:
     - sub-threshold operations
     - political warfare
 
+  applied_physics_lab:
+    - applied physics
+    - missile defense
+    - space security
+    - undersea warfare
+    - electronic warfare
+    - sensor systems
+    - C4ISR
+    - command and control
+
 # Funder-side language - used when searching funding portals
 funder_terms:
   - broad agency announcement
@@ -146,6 +163,8 @@ funder_terms:
   - fellowship program
   - research grant
   - capacity building
+  - white paper
+  - concept paper
 
 # Combined search queries - pre-built for common API searches
 search_queries:
@@ -197,6 +216,29 @@ search_queries:
     - threat assessment
     - resilience
     - cognitive warfare
+    - broad agency announcement
+    - BAA
+    - research and development
+    - defense technology
+    - strategic competition
+    - national security
+    - deterrence
+    - missile defense
+    - electronic warfare
+    - command and control
+    - social science research
+    - political warfare
+    - influence operations
+    - gray zone
+    - irregular warfare
+    - net assessment
+    - force planning
+    - alliance management
+    - applied research
+    - emerging technology
+    - artificial intelligence defense
+    - autonomous systems defense
+    - decision support systems
 
   foundation:
     - security policy research
@@ -212,3 +254,7 @@ search_queries:
     - global governance
     - authoritarianism
     - public interest technology
+    - US-Japan relations
+    - Taiwan democracy
+    - Indo-Pacific governance
+    - nuclear policy

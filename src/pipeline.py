@@ -167,6 +167,16 @@ class Pipeline:
         self.stats.total_raw = len(all_opportunities)
         console.print(f"\n  [bold]Raw opportunities: {self.stats.total_raw}[/bold]\n")
 
+        # ── Filter: Remove closed/awarded/expired opportunities ──
+        console.print("[bold]Filtering: Removing closed, awarded, and expired opportunities[/bold]")
+        before_filter = len(all_opportunities)
+        all_opportunities = self._filter_actionable(all_opportunities)
+        removed = before_filter - len(all_opportunities)
+        console.print(
+            f"  Filtered: {before_filter} → [green]{len(all_opportunities)}[/green] "
+            f"({removed} closed/awarded/expired removed)\n"
+        )
+
         # ── Stage 2: Deduplication ──
         console.print("[bold]Stage 2/6: Deduplication[/bold]")
         deduper = Deduplicator(
@@ -291,6 +301,105 @@ class Pipeline:
         self._print_top_table(opportunities)
 
         return excel_path
+
+    def _filter_actionable(self, opportunities: List[Opportunity]) -> List[Opportunity]:
+        """Remove opportunities that are closed, awarded, or expired.
+
+        Keeps:
+        - Active/open opportunities
+        - Forecasted/upcoming opportunities (not yet open)
+        - Presolicitations
+        - Opportunities with no clear status (benefit of the doubt)
+        - Awarded opportunities that explicitly mention external funding available
+
+        Removes:
+        - Opportunities with past deadlines
+        - Award notices (already awarded to someone)
+        - Canceled/archived/suspended opportunities
+        - Modifications to existing contracts
+        """
+        from datetime import datetime, date
+        actionable = []
+        today = date.today()
+
+        excluded_title_patterns = [
+            "award notice",
+            "intent to sole source",
+            "justification and approval",
+            "j&a -",
+            "j&a-",
+            "modification ",
+            "task order award",
+        ]
+
+        keep_exceptions = [
+            "funding available",
+            "subcontract",
+            "teaming",
+            "open to",
+            "seeking partners",
+        ]
+
+        excluded_statuses = {
+            "awarded", "closed", "canceled", "cancelled",
+            "archived", "suspended", "deleted", "expired",
+        }
+
+        for opp in opportunities:
+            title_lower = opp.title.lower()
+            status_lower = opp.status.lower() if opp.status else ""
+            notes_lower = opp.notes.lower() if opp.notes else ""
+
+            # Check for keep exceptions first
+            has_exception = any(exc in title_lower for exc in keep_exceptions)
+
+            # Skip award notices / modifications unless they have keep exceptions
+            if not has_exception and any(pat in title_lower for pat in excluded_title_patterns):
+                continue
+
+            # Skip if status explicitly says closed/awarded
+            if status_lower and any(s in status_lower for s in excluded_statuses):
+                if not has_exception:
+                    continue
+
+            # Skip if notes say it's awarded/closed (from SAM.gov status)
+            if notes_lower:
+                if any(s in notes_lower for s in excluded_statuses) and not has_exception:
+                    continue
+
+            # Check deadline — skip if clearly past
+            if opp.deadline:
+                if self._is_past_date(opp.deadline):
+                    # Exception: keep forecasted/presolicitation even if "archive date" passed
+                    if opp.opportunity_type in ("Forecasted", "Presolicitation"):
+                        pass
+                    elif "forecast" in status_lower or "presol" in status_lower:
+                        pass
+                    else:
+                        continue
+
+            # Check urgency if already set
+            if opp.urgency == "EXPIRED" and not has_exception:
+                continue
+
+            actionable.append(opp)
+
+        return actionable
+
+    @staticmethod
+    def _is_past_date(date_str: str) -> bool:
+        """Check if a date string is in the past."""
+        from datetime import datetime, date
+        today = date.today()
+        for fmt in ["%m/%d/%Y", "%Y-%m-%d", "%B %d, %Y", "%b %d, %Y",
+                    "%m-%d-%Y", "%d %B %Y", "%m/%d/%y",
+                    "%Y-%m-%dT%H:%M:%S", "%m/%d/%Y %H:%M"]:
+            try:
+                dl = datetime.strptime(date_str.strip(), fmt).date()
+                return dl < today
+            except ValueError:
+                continue
+        return False
 
     def _build_queries(self) -> Dict[str, List[str]]:
         """Build search queries from keywords config."""

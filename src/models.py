@@ -53,6 +53,9 @@ class Opportunity:
     estimated_competitiveness: str = ""
     estimated_difficulty: str = ""
 
+    # Status
+    status: str = ""  # Active, Forecasted, Presolicitation, Closed, Awarded, etc.
+
     # Dates
     deadline: str = ""
     open_date: str = ""
