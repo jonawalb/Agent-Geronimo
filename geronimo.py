@@ -142,34 +142,44 @@ def verify_all_urls(rows: list) -> list:
 # ═══════════════════════════════════════════════════════════
 # KEYWORD CONFIG (from old scraper's proven tier system)
 # ═══════════════════════════════════════════════════════════
-TIER1 = [  # 30 pts — direct mission hits
-    # TSM / info warfare
+TIER1 = [  # 30 pts — direct mission hits (university-institute doable)
+    # TSM / info warfare / Indo-Pacific
     "Taiwan", "cognitive warfare", "information operations", "disinformation",
     "narrative warfare", "OSINT", "open source intelligence", "PRC influence",
     "China information", "Indo-Pacific security", "cross-strait", "Taiwan Strait",
     "coercion", "economic coercion", "military coercion", "coercive diplomacy",
     "cognitive domain", "information warfare", "perception management",
     "propaganda", "malign influence", "strategic deception",
-    # Defense / intel tech
-    "autonomous systems", "hypersonic", "missile defense", "electronic warfare",
-    "undersea warfare", "space security", "critical infrastructure protection",
-    "biodefense", "chemical defense", "directed energy", "counter-UAS",
-    "artificial intelligence defense", "AI military", "machine learning defense",
-    "cyber operations", "offensive cyber", "defensive cyber",
-    "signals intelligence", "SIGINT", "HUMINT", "GEOINT", "MASINT",
+    # AI / ML / data science for security (university-institute strengths)
+    "artificial intelligence", "machine learning", "deep learning",
+    "natural language processing", "computer vision", "data science",
+    "AI security", "AI defense", "AI governance", "AI policy",
+    "predictive analytics", "anomaly detection", "threat detection",
+    "computational social science", "social media analysis", "NLP",
+    "large language model", "generative AI", "AI ethics",
+    "AI early warning", "AI forecasting", "AI military",
+    "data analytics", "big data", "text mining", "sentiment analysis",
+    "network analysis", "graph analytics", "knowledge graph",
+    "automated detection", "bot detection", "deepfake detection",
+    "synthetic media", "AI misinformation", "algorithmic",
+    # Cybersecurity (research-oriented)
+    "cybersecurity", "cyber operations", "cyber defense", "cyber policy",
+    "critical infrastructure protection", "network security",
+    "offensive cyber", "defensive cyber", "cyber threat intelligence",
+    "zero trust", "cloud security", "encryption", "cyber resilience",
+    "ransomware", "cyber espionage", "supply chain security",
+    # Intelligence / OSINT
+    "signals intelligence", "SIGINT", "GEOINT", "MASINT",
+    "intelligence community", "intelligence analysis",
+    "geospatial intelligence", "open source intelligence",
     # Security policy
-    "homeland security", "security policy", "counterterrorism",
-    "intelligence community", "defense policy", "net assessment",
-    "force design", "force structure", "defense strategy",
-    # CONTRA / Latin America
-    "terrorism", "counternarcotics", "organized crime", "Latin America security",
-    "cartel", "illicit finance", "transnational crime", "gang violence",
-    "Central America", "narcoterrorism",
+    "security policy", "defense policy", "net assessment",
+    "defense strategy", "national security", "homeland security",
 ]
 TIER2 = [  # 20 pts — strong relevance
     "China", "deterrence", "Japan", "wargame", "wargaming", "crisis simulation",
     "narrative detection", "influence operations", "misinformation",
-    "AI early warning", "Taiwan security", "East Asia security", "PRC", "CCP",
+    "Taiwan security", "East Asia security", "PRC", "CCP",
     "psychological operations", "counter-disinformation", "compellence",
     "gray zone coercion", "Beijing", "Chinese Communist Party",
     "computational propaganda", "information manipulation", "strategic competition",
@@ -177,60 +187,67 @@ TIER2 = [  # 20 pts — strong relevance
     "united front", "sharp power", "state-sponsored disinformation",
     "foreign interference", "election interference", "South Korea", "Korea",
     "semiconductor", "chip war", "technology competition",
-    # Defense tech / APL
-    "radar systems", "signal processing", "command and control", "C4ISR",
-    "weapons systems", "force protection", "systems engineering",
-    "threat assessment", "sensor systems", "unmanned systems", "UAS", "UAV",
+    # Tech that a university institute can do
     "quantum computing", "quantum sensing", "quantum cryptography",
-    "5G military", "spectrum warfare", "EW", "electronic attack",
-    "ballistic missile", "cruise missile", "anti-ship", "torpedo",
-    "sonar", "acoustic sensing", "undersea", "submarine",
-    "space domain awareness", "satellite", "orbital", "launch vehicle",
-    "ISR", "intelligence surveillance reconnaissance",
-    "deep learning", "computer vision", "natural language processing",
-    "predictive analytics", "anomaly detection", "threat detection",
+    "autonomous systems", "unmanned systems", "UAS", "UAV",
+    "sensor systems", "ISR", "intelligence surveillance reconnaissance",
+    "remote sensing", "satellite imagery", "geospatial",
+    "data fusion", "sensor fusion", "multi-domain operations",
+    "robotics", "human-machine teaming", "decision support",
+    "simulation", "modeling", "agent-based modeling",
     # Security / CSPS
     "border security", "emergency management", "civil-military relations",
     "intelligence reform", "nuclear security", "arms control",
     "nonproliferation", "WMD", "weapons of mass destruction",
-    "counterintelligence", "insider threat", "security clearance",
-    # CONTRA
+    "counterintelligence", "insider threat",
+    # CT / CONTRA (relevant but not top priority)
+    "counterterrorism", "terrorism", "counternarcotics", "organized crime",
+    "Latin America security", "cartel", "illicit finance",
+    "transnational crime", "Central America", "narcoterrorism",
     "Venezuela", "Colombia", "Mexico security", "drug trafficking",
     "human trafficking", "money laundering", "terrorist financing",
-    "radicalization", "extremism", "insurgency", "paramilitary",
-    # Naval / maritime
-    "naval warfare", "sea power", "fleet architecture", "littoral",
-    "amphibious", "mine warfare", "anti-submarine",
+    "radicalization", "extremism",
 ]
 TIER3 = [  # 10 pts — broader fit
-    "Indo-Pacific", "Southeast Asia", "intelligence analysis",
+    "Indo-Pacific", "Southeast Asia",
     "geopolitical forecasting", "alliance resilience", "information resilience",
     "gray zone", "great power competition", "democracy resilience",
-    "social media analysis", "NLP security", "military AI", "AI forecasting",
-    "maritime security", "supply chain security", "authoritarian",
     "hybrid warfare", "narrative analysis", "strategic communication",
     "public diplomacy", "information environment", "media manipulation",
     "China policy", "Taiwan policy", "Asia security", "Pacific deterrence",
-    "economic statecraft", "decoupling", "cybersecurity", "national security",
+    "economic statecraft", "decoupling",
     "defense", "security studies", "foreign policy", "policy research",
     "resilience", "emerging technology",
-    # Tech / APL broader
-    "applied physics", "robotics", "machine learning", "neural network",
-    "climate security", "health security", "pandemic preparedness",
-    "additive manufacturing", "advanced materials", "nanotechnology",
-    "biotechnology", "synthetic biology", "dual-use technology",
-    "cloud security", "zero trust", "network security", "encryption",
-    "data fusion", "sensor fusion", "multi-domain operations",
+    # Defense hardware (less relevant — university can't build these)
+    "hypersonic", "missile defense", "electronic warfare",
+    "undersea warfare", "space security", "biodefense", "chemical defense",
+    "directed energy", "counter-UAS", "HUMINT",
+    "radar systems", "signal processing", "command and control", "C4ISR",
+    "weapons systems", "force protection", "systems engineering",
+    "5G military", "spectrum warfare", "EW", "electronic attack",
+    "ballistic missile", "cruise missile", "anti-ship", "torpedo",
+    "sonar", "acoustic sensing", "undersea", "submarine",
+    "space domain awareness", "satellite", "orbital", "launch vehicle",
+    "force design", "force structure",
+    "naval warfare", "sea power", "fleet architecture", "littoral",
+    "amphibious", "mine warfare", "anti-submarine",
     # Policy broader
     "public policy", "governance", "regulatory policy",
     "crisis management", "risk assessment", "strategic planning",
     "alliance management", "burden sharing", "extended deterrence",
     "nuclear posture", "arms race", "escalation management",
+    "maritime security", "authoritarian",
     # CONTRA broader
     "rule of law", "democratic governance", "anti-corruption",
     "conflict resolution", "peacebuilding", "stabilization",
     "fragile states", "migration security", "refugee",
     "gang", "illicit trafficking", "border enforcement",
+    "insurgency", "paramilitary", "security clearance",
+    # Hardware/manufacturing (track but low priority)
+    "applied physics", "additive manufacturing", "advanced materials",
+    "nanotechnology", "biotechnology", "synthetic biology", "dual-use technology",
+    "climate security", "health security", "pandemic preparedness",
+    "machine learning", "neural network",
 ]
 PRIORITY_FUNDERS = [  # +20 bonus
     # DoD / IC
@@ -261,83 +278,85 @@ PRIORITY_FUNDERS = [  # +20 bonus
 
 # Grants.gov search terms
 GG_SEARCH_TERMS = [
+    # AI / ML / data science / tech for security (TOP PRIORITY)
+    "artificial intelligence security", "machine learning defense",
+    "AI national security", "deep learning research",
+    "natural language processing security", "computer vision defense",
+    "data science national security", "predictive analytics security",
+    "cybersecurity research", "cyber threat intelligence",
+    "AI governance", "AI ethics policy", "generative AI",
+    "large language model research", "anomaly detection",
+    "social media analysis", "computational social science",
+    "disinformation detection", "deepfake detection",
+    "bot detection", "network analysis security",
+    "automated threat detection", "AI early warning",
+    "text mining intelligence", "sentiment analysis",
+    "open source intelligence AI", "geospatial AI",
     # TSM / Asia / info warfare
     "Taiwan", "China", "Indo-Pacific", "cognitive warfare", "disinformation",
     "information operations", "OSINT", "influence operations", "deterrence",
-    "open source intelligence", "misinformation", "psychological operations",
+    "misinformation", "psychological operations",
     "East Asia", "wargaming", "gray zone", "great power competition",
-    "coercion", "Beijing", "CCP", "propaganda", "information warfare",
-    "malign influence", "sharp power", "foreign interference", "hybrid warfare",
-    "strategic competition", "computational propaganda", "cross-strait",
-    "perception management", "compellence", "national security research",
-    "security studies", "defense analysis", "cybersecurity research",
-    "democratic resilience", "foreign policy research", "intelligence analysis",
-    "emerging technology security", "Japan security", "Korea security",
-    "South China Sea", "technology policy", "narrative analysis",
-    "geospatial intelligence", "strategic communications", "conflict analysis",
-    # Defense tech / AI / cyber
-    "autonomous systems", "hypersonic", "missile defense", "electronic warfare",
-    "undersea warfare", "space security", "critical infrastructure",
-    "biodefense", "sensor systems", "command and control",
-    "artificial intelligence", "machine learning", "deep learning",
-    "cyber defense", "network security", "quantum computing",
-    "directed energy", "counter-UAS", "unmanned systems",
-    "signals intelligence", "ISR", "surveillance reconnaissance",
-    "advanced computing", "data analytics", "predictive analytics",
-    "5G security", "spectrum", "radar", "sonar",
-    "naval research", "sea power", "anti-submarine warfare",
-    "space domain", "satellite", "ballistic missile defense",
-    # CSPS / homeland / intel
+    "propaganda", "information warfare", "strategic competition",
+    "foreign interference", "hybrid warfare", "cross-strait",
+    "national security research", "security studies",
+    "intelligence analysis", "emerging technology security",
+    "strategic communications", "conflict analysis",
+    # Cyber / tech
+    "cybersecurity", "cyber defense", "network security",
+    "critical infrastructure protection", "quantum computing",
+    "autonomous systems", "unmanned systems",
+    "data analytics", "advanced computing",
+    # Security / homeland
     "homeland security", "counterterrorism", "nuclear security",
-    "arms control", "nonproliferation", "emergency management",
-    "border security", "intelligence reform", "counterintelligence",
-    "weapons of mass destruction", "chemical biological",
-    "insider threat", "force protection",
+    "arms control", "nonproliferation",
     # CONTRA / Latin America
     "counternarcotics", "organized crime", "Latin America",
-    "transnational crime", "drug trafficking", "terrorism research",
-    "anti-corruption", "rule of law", "human trafficking",
-    "Central America", "Colombia", "Venezuela", "Mexico security",
-    "illicit finance", "gang violence", "border enforcement",
+    "transnational crime", "drug trafficking",
 ]
 
 # SAM.gov search terms
 # SAM.gov search terms — kept to ~15 broad terms to stay under 1,000 req/day quota
 # Each broad term catches multiple narrower topics in a single API call
 SAM_SEARCH_TERMS = [
-    "Indo-Pacific security",          # Taiwan, China, PRC, East Asia, INDOPACOM
-    "information operations",          # cognitive warfare, disinformation, influence ops, propaganda
-    "intelligence analysis",           # OSINT, GEOINT, SIGINT, ISR, strategic warning
-    "defense research",                # BAAs, defense innovation, applied research
-    "cybersecurity",                   # cyber operations, network security, critical infrastructure
-    "deterrence",                      # strategic competition, gray zone, hybrid warfare, coercion
-    "counterterrorism",                # homeland security, threat assessment
-    "autonomous systems",              # unmanned, AI, machine learning, robotics
-    "missile defense",                 # hypersonic, directed energy, space systems
-    "electronic warfare",              # EW, spectrum, sensor, C4ISR
-    "naval research",                  # undersea, maritime, anti-submarine
-    "counternarcotics",                # transnational crime, Latin America, organized crime
-    "wargaming",                       # simulation, tabletop, scenario planning, net assessment
-    "nuclear security",                # nonproliferation, arms control, WMD
-    "social science research defense", # Minerva-style, political warfare, strategic comms
+    "artificial intelligence research",  # AI/ML grants and contracts
+    "machine learning defense",          # ML for national security
+    "cybersecurity research",            # cyber ops, network security, infrastructure
+    "data science national security",    # analytics, big data, predictive
+    "information operations",            # cognitive warfare, disinformation, influence ops
+    "Indo-Pacific security",             # Taiwan, China, PRC, East Asia
+    "intelligence analysis",             # OSINT, GEOINT, SIGINT, ISR
+    "defense research",                  # BAAs, defense innovation, applied research
+    "deterrence",                        # strategic competition, gray zone, coercion
+    "disinformation detection",          # deepfake, bot detection, computational propaganda
+    "counterterrorism",                  # homeland security, threat assessment
+    "counternarcotics",                  # transnational crime, Latin America
+    "wargaming",                         # simulation, tabletop, net assessment
+    "social science research defense",   # Minerva-style, political warfare, strategic comms
+    "natural language processing",       # NLP, text analytics, LLM
 ]
 
 # NSF search terms (more targeted to avoid noise)
 NSF_SEARCH_TERMS = [
-    "Taiwan security", "China military", "Indo-Pacific security", "disinformation",
-    "information operations", "influence operations", "OSINT intelligence",
+    # AI / ML / data science (university institute strengths)
+    "artificial intelligence security", "machine learning",
+    "natural language processing", "deep learning",
+    "computer vision", "data science", "predictive analytics",
+    "social media analysis", "computational social science",
+    "network analysis", "text mining", "anomaly detection",
+    "AI governance", "AI ethics", "generative AI",
+    "disinformation detection", "misinformation",
+    "bot detection", "deepfake", "synthetic media",
+    # Cybersecurity
+    "cybersecurity", "cyber defense", "network security",
+    "critical infrastructure", "cyber threat",
+    # Security / geopolitics
+    "Taiwan security", "China military", "Indo-Pacific security",
+    "information operations", "influence operations",
     "deterrence strategy", "East Asia security", "wargaming simulation",
-    "strategic communication", "open source intelligence", "information warfare",
-    "hybrid warfare", "strategic competition", "computational propaganda",
-    "cross-strait", "PLA military",
-    "autonomous systems defense", "missile defense technology",
-    "counterterrorism research", "homeland security research",
-    "transnational crime", "Latin America governance", "organized crime",
-    "nuclear nonproliferation", "arms control verification",
-    "cybersecurity defense", "artificial intelligence security",
-    "electronic warfare", "hypersonic defense", "quantum cryptography",
-    "unmanned systems military", "undersea detection",
+    "strategic competition", "computational propaganda",
     "intelligence analysis", "geospatial intelligence",
+    "homeland security research", "counterterrorism research",
 ]
 
 # Organization project lines (for matching column)
