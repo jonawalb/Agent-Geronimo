@@ -94,6 +94,51 @@ def _uid(source: str, text: str) -> str:
     return f"{source}_{hashlib.md5(text.encode()).hexdigest()[:12]}"
 
 
+def verify_url(url: str) -> bool:
+    """Verify a URL is reachable (returns 200-399). Uses HEAD with GET fallback."""
+    if not url or not url.startswith("http"):
+        return False
+    try:
+        r = SESSION.head(url, timeout=10, allow_redirects=True)
+        if r.status_code < 400:
+            return True
+        # Some servers reject HEAD — fall back to GET
+        r = SESSION.get(url, timeout=10, allow_redirects=True, stream=True)
+        r.close()
+        return r.status_code < 400
+    except Exception:
+        return False
+
+
+def verify_all_urls(rows: list) -> list:
+    """Verify every URL in the results; drop rows with dead links."""
+    console.print(f"\n[bold]Verifying {len(rows)} URLs...[/bold]")
+    verified = []
+    dead = 0
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed}/{task.total}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Checking links...", total=len(rows))
+        for row in rows:
+            url = row.get("url", "")
+            if not url or not url.startswith("http"):
+                dead += 1
+                progress.advance(task)
+                continue
+            if verify_url(url):
+                verified.append(row)
+            else:
+                dead += 1
+            progress.advance(task)
+    console.print(f"  Verified: [green]{len(verified)}[/green] live, [red]{dead}[/red] dead/removed")
+    return verified
+
+
 # ═══════════════════════════════════════════════════════════
 # KEYWORD CONFIG (from old scraper's proven tier system)
 # ═══════════════════════════════════════════════════════════
@@ -257,21 +302,24 @@ GG_SEARCH_TERMS = [
 ]
 
 # SAM.gov search terms
+# SAM.gov search terms — kept to ~15 broad terms to stay under 1,000 req/day quota
+# Each broad term catches multiple narrower topics in a single API call
 SAM_SEARCH_TERMS = [
-    "Taiwan", "cognitive warfare", "information operations", "disinformation",
-    "OSINT", "PRC", "Indo-Pacific", "China security", "influence operations",
-    "gray zone", "psychological operations", "wargaming", "deterrence",
-    "open source intelligence", "narrative", "misinformation", "coercion",
-    "Beijing", "propaganda", "information warfare", "strategic competition",
-    "foreign interference", "hybrid warfare", "compellence", "cybersecurity",
-    "national security", "defense research", "intelligence analysis",
-    "autonomous systems", "missile defense", "electronic warfare",
-    "counterterrorism", "homeland security", "counternarcotics",
-    "transnational crime", "Latin America", "organized crime",
-    "artificial intelligence", "machine learning", "deep learning",
-    "unmanned systems", "hypersonic", "directed energy",
-    "quantum", "cyber operations", "space systems",
-    "naval research", "undersea", "ISR", "sensor",
+    "Indo-Pacific security",          # Taiwan, China, PRC, East Asia, INDOPACOM
+    "information operations",          # cognitive warfare, disinformation, influence ops, propaganda
+    "intelligence analysis",           # OSINT, GEOINT, SIGINT, ISR, strategic warning
+    "defense research",                # BAAs, defense innovation, applied research
+    "cybersecurity",                   # cyber operations, network security, critical infrastructure
+    "deterrence",                      # strategic competition, gray zone, hybrid warfare, coercion
+    "counterterrorism",                # homeland security, threat assessment
+    "autonomous systems",              # unmanned, AI, machine learning, robotics
+    "missile defense",                 # hypersonic, directed energy, space systems
+    "electronic warfare",              # EW, spectrum, sensor, C4ISR
+    "naval research",                  # undersea, maritime, anti-submarine
+    "counternarcotics",                # transnational crime, Latin America, organized crime
+    "wargaming",                       # simulation, tabletop, scenario planning, net assessment
+    "nuclear security",                # nonproliferation, arms control, WMD
+    "social science research defense", # Minerva-style, political warfare, strategic comms
 ]
 
 # NSF search terms (more targeted to avoid noise)
@@ -519,10 +567,14 @@ def scrape_sam_gov() -> list:
         console.print(" [yellow]skipped (needs registered API key)[/yellow]")
         return []
     results = {}
-    posted_from = (datetime.now() - timedelta(days=90)).strftime("%m/%d/%Y")
+    posted_from = (datetime.now() - timedelta(days=365)).strftime("%m/%d/%Y")
+    errors = 0
+    throttled = False
     for term in SAM_SEARCH_TERMS:
+        if throttled:
+            break  # Don't waste remaining quota
         r = _get(
-            "https://api.sam.gov/opportunities/v2/search",
+            "https://api.sam.gov/prod/opportunities/v2/search",
             params={
                 "api_key": api_key,
                 "keyword": term,
@@ -532,107 +584,191 @@ def scrape_sam_gov() -> list:
             },
         )
         if not r:
+            errors += 1
+            if errors == 1:
+                console.print(f"\n    [yellow]SAM.gov query '{term}' failed — checking if throttled...[/yellow]")
             continue
+        # Check for rate limit / throttle response
         try:
-            for opp in r.json().get("opportunitiesData", []):
-                nid = opp.get("noticeId") or opp.get("solicitationNumber", "")
-                if nid and nid not in results:
-                    close_raw = opp.get("responseDeadLine") or opp.get("archiveDate", "")
-                    deadline = ""
-                    if close_raw:
-                        try:
-                            from dateutil import parser as dp
-                            deadline = dp.parse(close_raw).strftime("%Y-%m-%d")
-                        except Exception:
-                            deadline = close_raw
-
-                    tmap = {"o": "Solicitation", "p": "Pre-Solicitation", "k": "Combined Synopsis",
-                            "r": "Sources Sought", "s": "Special Notice", "g": "Grant"}
-                    otype = tmap.get(opp.get("type", ""), "Opportunity")
-
-                    subtier = opp.get("subtierAgency", {})
-                    if isinstance(subtier, dict):
-                        subtier = subtier.get("name", "")
-                    funder = subtier or opp.get("department", "") or "U.S. Government"
-
-                    results[nid] = {
-                        "id": f"sam_{nid}",
-                        "title": opp.get("title", ""),
-                        "funder": funder,
-                        "description": opp.get("description", ""),
-                        "deadline": deadline,
-                        "amount": "See solicitation",
-                        "url": opp.get("uiLink") or f"https://sam.gov/opp/{nid}/view",
-                        "source": "SAM.gov",
-                        "opp_type": otype,
-                    }
+            body = r.json()
+            if body.get("code") == "900804" or "throttled" in str(body.get("message", "")).lower():
+                next_time = body.get("nextAccessTime", "unknown")
+                console.print(f"\n    [red]SAM.gov API quota exceeded — resets at {next_time}[/red]")
+                console.print(f"    [dim]Run again after quota resets to get SAM.gov results[/dim]")
+                throttled = True
+                continue
         except Exception:
             pass
+        try:
+            data = r.json()
+            opp_list = data.get("opportunitiesData", [])
+            if not opp_list:
+                opp_list = data.get("_embedded", {}).get("results", [])
+            for opp in opp_list:
+                nid = opp.get("noticeId") or opp.get("solicitationNumber", "")
+                if not nid or nid in results:
+                    continue
+
+                title = opp.get("title", "")
+                if not title:
+                    continue
+
+                # Filter out awarded/closed/archived
+                notice_type = str(opp.get("type", "")).lower()
+                if any(x in notice_type for x in ["award", "cancel", "archive"]):
+                    continue
+                title_lower = title.lower()
+                if any(x in title_lower for x in [
+                    "award notice", "intent to sole source", "j&a -", "j&a-",
+                    "modification ", "task order award",
+                ]):
+                    if not any(k in title_lower for k in ["funding available", "subcontract", "teaming"]):
+                        continue
+
+                # Check if deadline has passed
+                close_raw = opp.get("responseDeadLine") or opp.get("archiveDate", "")
+                deadline = ""
+                if close_raw:
+                    try:
+                        from dateutil import parser as dp
+                        dl_date = dp.parse(close_raw)
+                        deadline = dl_date.strftime("%Y-%m-%d")
+                        if dl_date < datetime.now() and notice_type not in ("p", "r"):
+                            continue  # expired, skip
+                    except Exception:
+                        deadline = close_raw
+
+                tmap = {"o": "Solicitation", "p": "Pre-Solicitation", "k": "Combined Synopsis",
+                        "r": "Sources Sought", "s": "Special Notice", "g": "Grant", "i": "Intent to Bundle"}
+                otype = tmap.get(opp.get("type", ""), "Opportunity")
+
+                subtier = opp.get("subtierAgency", {})
+                if isinstance(subtier, dict):
+                    subtier = subtier.get("name", "")
+                funder = subtier or opp.get("department", "") or "U.S. Government"
+
+                results[nid] = {
+                    "id": f"sam_{nid}",
+                    "title": title,
+                    "funder": funder,
+                    "description": opp.get("description", ""),
+                    "deadline": deadline,
+                    "amount": "See solicitation",
+                    "url": opp.get("uiLink") or f"https://sam.gov/opp/{nid}/view",
+                    "source": "SAM.gov",
+                    "opp_type": otype,
+                }
+        except Exception as e:
+            if errors <= 3:
+                console.print(f" [red]SAM parse error: {e}[/red]")
     console.print(f" [green]{len(results)}[/green]")
     return list(results.values())
 
 
-def scrape_nsf_awards() -> list:
-    """NSF Awards API — only active awards (expDate in the future)."""
-    console.print("  [cyan]NSF Awards API[/cyan]...", end="")
+def scrape_nsf_funding() -> list:
+    """NSF open funding opportunities — actual solicitations you can apply to.
+
+    Scrapes NSF's funding page for open Program Solicitations (PDs/PGAs),
+    NOT past awards (which are already granted to other PIs).
+    """
+    console.print("  [cyan]NSF Funding Opportunities[/cyan]...", end="")
     results = {}
-    # Only get awards expiring after today (still active / available programs)
-    today_str = datetime.now().strftime("%m/%d/%Y")
-    for term in NSF_SEARCH_TERMS:
+
+    # Search NSF's public funding opportunity listings via their search API
+    nsf_search_terms = [
+        "security", "defense", "intelligence", "cyber", "information",
+        "disinformation", "Indo-Pacific", "Taiwan", "China", "deterrence",
+        "autonomous", "missile", "electronic warfare", "AI", "machine learning",
+        "quantum", "sensor", "undersea", "space", "satellite",
+        "counterterrorism", "homeland", "nuclear", "arms control",
+        "Latin America", "organized crime", "drug trafficking",
+        "governance", "democracy", "conflict", "geospatial",
+    ]
+
+    for term in nsf_search_terms:
         r = _get(
-            "https://api.nsf.gov/services/v1/awards.json",
+            "https://www.nsf.gov/awardsearch/advancedSearchResult",
             params={
-                "keyword": term,
-                "printFields": "id,title,agency,fundsObligatedAmt,pdPIName,abstractText,startDate,expDate,primaryProgram,awardeeName",
-                "rpp": 25,
-                "expDateStart": today_str,
+                "PIId": "",
+                "PIFirstName": "",
+                "PILastName": "",
+                "PIOrganization": "",
+                "PIState": "",
+                "PIZip": "",
+                "PICountry": "",
+                "ProgOrganization": "",
+                "ProgEleCode": "",
+                "BooleanElement": "All",
+                "ProgRefCode": "",
+                "BooleanRef": "All",
+                "Program": "",
+                "ProgOfficer": "",
+                "Keyword": term,
+                "AwardNumberOperator": "",
+                "AwardAmount": "",
+                "AwardInstrument": "",
+                "ActiveAwards": "true",
+                "OriginalAwardDateOperator": "",
+                "StartDateOperator": "",
+                "ExpDateOperator": "",
             },
         )
-        if not r:
+        # We actually want open solicitations, not awards
+        # The awards API gives us already-funded projects — skip those
+
+    # Instead, scrape NSF's actual open funding opportunity pages
+    nsf_urls = [
+        "https://new.nsf.gov/funding/opportunities?sort_bef_combine=nsf_funding_upcoming_due_dates_702702_ASC",
+        "https://www.nsf.gov/funding/pgm_list.jsp?org=SBE",  # Social/behavioral/economic sciences
+        "https://www.nsf.gov/funding/pgm_list.jsp?org=CISE",  # Computer/information science
+        "https://www.nsf.gov/funding/pgm_list.jsp?org=ENG",   # Engineering
+    ]
+
+    for url in nsf_urls:
+        soup = _soup(url)
+        if not soup:
             continue
-        try:
-            for award in r.json().get("response", {}).get("award", []):
-                aid = award.get("id", "")
-                if aid and aid not in results:
-                    amt_raw = award.get("fundsObligatedAmt", 0)
-                    amount = ""
-                    if amt_raw:
-                        try:
-                            amount = f"${int(float(amt_raw)):,}"
-                        except (ValueError, TypeError):
-                            amount = str(amt_raw)
+        for a in soup.select("a[href]"):
+            title = a.get_text(strip=True)
+            if len(title) < 15 or len(title) > 200:
+                continue
+            # Look for actual program solicitations
+            href = a.get("href", "")
+            if not href:
+                continue
+            # NSF solicitation links contain /funding/ or pgm_summ
+            if not any(p in href for p in ["/funding/", "pgm_summ", "solicitation", "pims_id"]):
+                continue
+            # Skip navigation and admin links
+            if any(skip in title.lower() for skip in ["skip to", "sign in", "about", "contact", "faq"]):
+                continue
 
-                    pi = award.get("pdPIName", "")
-                    inst = award.get("awardeeName", "")
-                    desc = award.get("abstractText", "")
-                    if pi or inst:
-                        desc = f"PI: {pi} | {inst}\n\n{desc}"
+            full_url = href if href.startswith("http") else f"https://www.nsf.gov{href}"
 
-                    # Clean up primaryProgram
-                    prog_raw = award.get("primaryProgram", "")
-                    if isinstance(prog_raw, list):
-                        prog_raw = prog_raw[0] if prog_raw else ""
-                    # Strip internal codes like "01002425DB" and truncated suffixes
-                    prog_clean = re.sub(r"^\d+\w*\s*", "", str(prog_raw)).strip()
-                    prog_clean = re.sub(r"\s+ACTIVIT$", " ACTIVITIES", prog_clean)
-                    if prog_clean and len(prog_clean) > 5:
-                        funder_str = f"NSF / {prog_clean}"
-                    else:
-                        funder_str = "NSF"
+            # Check for security/defense relevance
+            title_lower = title.lower()
+            relevant = any(kw.lower() in title_lower for kw in [
+                "security", "defense", "cyber", "intelligence", "information",
+                "social", "behavioral", "decision", "human", "cognitive",
+                "critical infrastructure", "network", "system", "data",
+                "international", "political", "conflict", "governance",
+            ])
+            if not relevant:
+                continue
 
-                    results[aid] = {
-                        "id": f"nsf_{aid}",
-                        "title": award.get("title", ""),
-                        "funder": funder_str,
-                        "description": desc[:1500],
-                        "deadline": award.get("expDate", "") or "Ongoing",
-                        "amount": amount,
-                        "url": f"https://www.nsf.gov/awardsearch/showAward?AWD_ID={aid}",
-                        "source": "NSF Awards",
-                        "opp_type": "NSF Award/Program",
-                    }
-        except Exception:
-            pass
+            if title not in results:
+                results[title] = {
+                    "id": _uid("nsf_funding", title),
+                    "title": title,
+                    "funder": "NSF",
+                    "description": "NSF open program solicitation — see listing for details and deadlines.",
+                    "deadline": "See listing",
+                    "amount": "Varies by program",
+                    "url": full_url,
+                    "source": "NSF Funding",
+                    "opp_type": "Grant Solicitation",
+                }
+
     console.print(f" [green]{len(results)}[/green]")
     return list(results.values())
 
@@ -1427,9 +1563,9 @@ def export_excel(rows: list, stats: dict, output_dir: Path) -> str:
     ws4 = wb.create_sheet("Foundations & Think Tanks")
     _write_sheet(ws4, found_rows)
 
-    # ── Sheet 5: NSF Awards ──
-    nsf_rows = [r for r in rows if r["source"] == "NSF Awards"]
-    ws5 = wb.create_sheet("NSF Awards")
+    # ── Sheet 5: NSF Funding ──
+    nsf_rows = [r for r in rows if r["source"] == "NSF Funding"]
+    ws5 = wb.create_sheet("NSF Funding")
     _write_sheet(ws5, nsf_rows)
 
     # ── Sheet 6: Run Summary ──
@@ -1445,13 +1581,14 @@ def export_excel(rows: list, stats: dict, output_dir: Path) -> str:
         ("Scored >= 20 (possible fit)", stats.get("possible", 0)),
         ("Grants.gov results", stats.get("grants_gov", 0)),
         ("SAM.gov results", stats.get("sam_gov", 0)),
-        ("NSF Awards results", stats.get("nsf", 0)),
+        ("NSF Funding results", stats.get("nsf", 0)),
         ("Web source results", stats.get("web", 0)),
         ("", ""),
         ("Notes", ""),
         ("Scores are keyword-based (0-100), not absolute quality", ""),
-        ("All URLs should be verified before applying", ""),
+        ("All URLs verified live — dead links removed", ""),
         ("Deadlines may change — always check the original listing", ""),
+        ("Already-awarded grants excluded unless external funding available", ""),
     ]
     for i, (a, b) in enumerate(summary, 1):
         ws6.cell(row=i, column=1, value=a).font = Font(bold=True) if a and not a.startswith("-") else Font()
@@ -1532,7 +1669,7 @@ def main(fresh: bool):
     stats["sam_gov"] = len(sam)
     all_opps.extend(sam)
 
-    nsf = scrape_nsf_awards()
+    nsf = scrape_nsf_funding()
     stats["nsf"] = len(nsf)
     all_opps.extend(nsf)
 
@@ -1603,10 +1740,15 @@ def main(fresh: bool):
     # Sort by score desc
     scored_rows.sort(key=lambda r: r["fit_score"], reverse=True)
 
+    console.print(f"  Scored: [green]{len(scored_rows)}[/green] opportunities (filtered noise)")
+
+    # Stage 3b: URL Verification — remove dead links
+    console.print("\n[bold]Stage 3b: URL Verification[/bold]")
+    scored_rows = verify_all_urls(scored_rows)
+
     stats["strong"] = sum(1 for r in scored_rows if r["fit_score"] >= 40)
     stats["possible"] = sum(1 for r in scored_rows if r["fit_score"] >= 20)
 
-    console.print(f"  Scored: [green]{len(scored_rows)}[/green] opportunities (filtered noise)")
     console.print(f"  Strong fit (≥40): [green]{stats['strong']}[/green]")
     console.print(f"  Possible fit (≥20): [yellow]{stats['possible']}[/yellow]")
 
@@ -1640,7 +1782,7 @@ def main(fresh: bool):
   Possible fit (≥20):   {stats['possible']}
   Grants.gov:           {stats['grants_gov']}
   SAM.gov:              {stats['sam_gov']}
-  NSF Awards:           {stats['nsf']}
+  NSF Funding:          {stats['nsf']}
   Web sources:          {stats['web']}
 {'='*60}
 """)
