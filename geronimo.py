@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-Agent Geronimo v3 — Exhaustive Funding Opportunity Discovery
+Agent Geronimo v4 — Strategic Federal Opportunity Discovery & Triage
 
-Combines targeted API searches (Grants.gov, SAM.gov, NSF Awards) with
-web scraping of 20+ foundations and agencies, then scores, enriches,
-and exports a clean Excel workbook with no empty columns.
+An elite opportunity scout, capture strategist, and institutional fit analyst.
+Finds the BEST opportunities, not the MOST opportunities.
+
+Searches broadly, filters aggressively, scores multi-dimensionally, and
+produces a sharply curated pipeline optimized for decision usefulness.
 
 Usage:
     python geronimo.py              # full run
@@ -407,41 +409,390 @@ ORG_PROJECTS = [
 
 
 # ═══════════════════════════════════════════════════════════
-# SCORING
+# HARD FILTERS — exclude clearly irrelevant opportunities
+# ═══════════════════════════════════════════════════════════
+HARD_EXCLUDE_PATTERNS = re.compile(
+    r'\b(biomedical|clinical trial|patient care|nursing|pharmaceutical|'
+    r'veterinary|dental|optometry|podiatry|radiology|oncology|'
+    r'highway construction|road paving|building renovation|'
+    r'plumbing|hvac|janitorial|custodial|landscaping|'
+    r'school lunch|child nutrition|head start|'
+    r'municipal water|sewage treatment|waste disposal|'
+    r'social work licensure|marriage counseling)\b',
+    re.IGNORECASE,
+)
+
+SMALL_BUSINESS_ONLY = re.compile(
+    r'\b(small business set.?aside|8\(a\) sole source|hubzone|'
+    r'sdvosb set.?aside|wosb set.?aside|small business only)\b',
+    re.IGNORECASE,
+)
+
+
+# ═══════════════════════════════════════════════════════════
+# MULTI-DIMENSIONAL SCORING
 # ═══════════════════════════════════════════════════════════
 def _kw_in_text(kw: str, text: str) -> bool:
     """Check if keyword is in text, using word boundaries for short keywords."""
     kw_lower = kw.lower()
     if len(kw_lower) <= 4:
-        # Short keywords need word boundary to avoid substring false positives
         return bool(re.search(r'\b' + re.escape(kw_lower) + r'\b', text))
     return kw_lower in text
 
 
-def score_opp(title: str, description: str, funder: str, opp_type: str = "") -> tuple:
-    """Score an opportunity 0-100 and return (score, matched_keywords)."""
-    text = f"{title} {description} {funder} {opp_type}".lower()
+def score_mission_fit(text: str, matched: list) -> int:
+    """Score 1-5: how relevant is this to the institute's priorities?"""
     score = 0
-    matched = []
-
     for kw in TIER1:
         if _kw_in_text(kw, text):
-            score += 30
+            score += 3
             matched.append(kw)
     for kw in TIER2:
         if _kw_in_text(kw, text):
-            score += 20
+            score += 2
             matched.append(kw)
     for kw in TIER3:
         if _kw_in_text(kw, text):
-            score += 10
+            score += 1
             matched.append(kw)
     for fkw in PRIORITY_FUNDERS:
         if _kw_in_text(fkw, text):
-            score += 20
+            score += 2
             matched.append(f"[FUNDER]{fkw}")
+    # Map raw to 1-5
+    if score >= 15:
+        return 5
+    if score >= 10:
+        return 4
+    if score >= 6:
+        return 3
+    if score >= 3:
+        return 2
+    return 1
 
-    return min(score, 100), matched
+
+def score_eligibility_fit(text: str, opp_type: str, funder: str) -> int:
+    """Score 1-5: can the institute realistically pursue this?"""
+    score = 3  # default — probably eligible
+    text_lower = text.lower()
+    opp_lower = opp_type.lower()
+
+    # Boost for types clearly open to universities/nonprofits/think tanks
+    if any(t in opp_lower for t in ["grant", "cooperative agreement", "fellowship",
+                                     "baa", "rfi", "sources sought"]):
+        score += 1
+    if any(kw in text_lower for kw in ["university", "higher education", "nonprofit",
+                                        "research institution", "think tank", "policy center"]):
+        score += 1
+
+    # Downgrade for things likely requiring cleared facilities or FFRDC status
+    if any(kw in text_lower for kw in ["top secret", "ts/sci", "scif required",
+                                        "ffrdc only", "uarc only", "cleared facility"]):
+        score -= 2
+    if SMALL_BUSINESS_ONLY.search(text):
+        score -= 2
+
+    # Contracts are harder for non-traditional performers
+    if opp_lower in ("contract", "solicitation") and "research" not in text_lower:
+        score -= 1
+
+    return max(1, min(5, score))
+
+
+def score_feasibility(text: str, opp_type: str, amount: str) -> int:
+    """Score 1-5: how feasible is this to actually win?"""
+    score = 3
+    text_lower = text.lower()
+
+    # Higher feasibility for research/analysis/policy
+    if any(kw in text_lower for kw in ["policy research", "social science", "analysis",
+                                        "assessment", "workshop", "convening",
+                                        "report", "white paper", "study"]):
+        score += 1
+
+    # Lower feasibility for hardware/engineering-heavy
+    if any(kw in text_lower for kw in ["prototype", "hardware", "manufacturing",
+                                        "test range", "flight test", "systems integration",
+                                        "production", "fabrication"]):
+        score -= 1
+
+    # BAAs and RFIs are more accessible
+    opp_lower = opp_type.lower()
+    if any(t in opp_lower for t in ["baa", "rfi", "sources sought"]):
+        score += 1
+
+    # Large contracts are harder to win for newcomers
+    try:
+        amt_str = re.sub(r'[^\d]', '', str(amount))
+        if amt_str and int(amt_str) > 10_000_000:
+            score -= 1
+    except (ValueError, TypeError):
+        pass
+
+    return max(1, min(5, score))
+
+
+def score_strategic_value(text: str, amount: str, funder: str) -> int:
+    """Score 1-5: funding amount, prestige, repeatability, positioning value."""
+    score = 3
+    text_lower = text.lower()
+    funder_lower = funder.lower()
+
+    # Priority funders = higher strategic value
+    for fkw in PRIORITY_FUNDERS:
+        if _kw_in_text(fkw, funder_lower) or _kw_in_text(fkw, text_lower):
+            score += 1
+            break
+
+    # Good funding amounts
+    try:
+        amt_str = re.sub(r'[^\d]', '', str(amount))
+        if amt_str:
+            amt = int(amt_str)
+            if amt >= 500_000:
+                score += 1
+            elif amt < 25_000:
+                score -= 1
+    except (ValueError, TypeError):
+        pass
+
+    # Recurring/center/institute = long-term value
+    if any(kw in text_lower for kw in ["center", "institute", "consortium",
+                                        "recurring", "annual", "multi-year"]):
+        score += 1
+
+    return max(1, min(5, score))
+
+
+def compute_total_score(mission: int, eligibility: int, feasibility: int, strategic: int) -> float:
+    """Weighted total: 0.35*mission + 0.25*eligibility + 0.20*feasibility + 0.20*strategic."""
+    raw = 0.35 * mission + 0.25 * eligibility + 0.20 * feasibility + 0.20 * strategic
+    return round(raw, 2)
+
+
+def determine_persona(text: str, opp_type: str) -> str:
+    """Assign best institutional persona(s)."""
+    text_lower = text.lower()
+    opp_lower = opp_type.lower()
+    personas = []
+
+    if any(kw in text_lower for kw in ["university", "academic", "faculty", "research center",
+                                        "higher education", "campus"]):
+        personas.append("University center")
+    if any(kw in text_lower for kw in ["policy", "strategic", "analysis", "assessment",
+                                        "governance", "diplomatic", "foreign affairs"]):
+        personas.append("Think tank")
+    if any(kw in text_lower for kw in ["osint", "geoint", "data", "analytics", "monitoring",
+                                        "forecasting", "early warning", "decision support",
+                                        "AI", "machine learning", "modeling", "simulation"]):
+        personas.append("Applied analytics shop")
+    if any(kw in text_lower for kw in ["prototype", "engineering", "systems", "hardware",
+                                        "technology development", "technical"]):
+        personas.append("Technical teaming partner")
+
+    if not personas:
+        if "grant" in opp_lower or "cooperative" in opp_lower:
+            personas.append("University center")
+        elif "contract" in opp_lower or "baa" in opp_lower:
+            personas.append("Think tank")
+        else:
+            personas.append("Think tank")
+
+    return "; ".join(personas[:2])
+
+
+def determine_mode(mission: int, eligibility: int, feasibility: int, text: str, opp_type: str) -> str:
+    """Assign recommended mode: Prime, Sub, Team, Track, Discard."""
+    text_lower = text.lower()
+    opp_lower = opp_type.lower()
+
+    if eligibility <= 1:
+        return "Discard"
+
+    if mission <= 1:
+        return "Discard"
+
+    # Research/policy opportunities — can likely prime
+    if eligibility >= 4 and feasibility >= 3 and mission >= 3:
+        if any(t in opp_lower for t in ["grant", "cooperative", "fellowship"]):
+            return "Prime directly"
+        if any(t in opp_lower for t in ["baa", "rfi", "sources sought"]):
+            return "Prime through university"
+
+    # Technical or large contracts — team or sub
+    if any(kw in text_lower for kw in ["prototype", "hardware", "systems integration",
+                                        "manufacturing", "cleared facility"]):
+        if mission >= 3:
+            return "Team with technical partner"
+        return "Track for future cycle"
+
+    if feasibility <= 2 and mission >= 3:
+        return "Join as subawardee"
+
+    if mission >= 3 and eligibility >= 3:
+        if "contract" in opp_lower:
+            return "Prime through university"
+        return "Prime directly"
+
+    if mission >= 2:
+        return "Track for future cycle"
+
+    return "Discard"
+
+
+def generate_why_fits(matched_kw: list, funder: str, mission: int, persona: str) -> str:
+    """Generate specific, non-generic explanation of fit."""
+    topics = [kw for kw in matched_kw if not kw.startswith("[FUNDER]")][:6]
+    funder_matches = [kw.replace("[FUNDER]", "") for kw in matched_kw if kw.startswith("[FUNDER]")]
+
+    parts = []
+
+    # Strength mapping
+    strength_map = {
+        "Taiwan": "Indo-Pacific strategic analysis and Taiwan security monitoring",
+        "cognitive warfare": "cognitive warfare and information environment analysis",
+        "information operations": "influence monitoring and information operations research",
+        "disinformation": "disinformation detection and counter-narrative analysis",
+        "OSINT": "open-source intelligence collection and analytical workflows",
+        "deterrence": "deterrence theory and strategic competition analysis",
+        "wargaming": "scenario-based wargaming and crisis simulation",
+        "cybersecurity": "cyber policy research and critical infrastructure analysis",
+        "Indo-Pacific": "Indo-Pacific regional security expertise",
+        "gray zone": "gray-zone competition and sub-threshold operations analysis",
+        "defense": "defense policy research and strategic studies",
+        "national security": "national security research and policy analysis",
+        "intelligence": "intelligence studies and strategic warning analysis",
+        "missile defense": "defense technology assessment and force structure analysis",
+        "electronic warfare": "defense technology and electronic warfare policy",
+        "autonomous": "autonomous systems policy and AI security research",
+    }
+
+    for topic in topics[:3]:
+        for key, desc in strength_map.items():
+            if key.lower() in topic.lower():
+                parts.append(desc)
+                break
+
+    if not parts:
+        parts.append("security studies research and policy analysis")
+
+    # Build the explanation
+    core = parts[0] if parts else "national security research"
+    extras = ", ".join(parts[1:3]) if len(parts) > 1 else ""
+
+    explanation = f"Aligns with the institute's comparative advantage in {core}"
+    if extras:
+        explanation += f", as well as {extras}"
+    explanation += "."
+
+    if funder_matches:
+        explanation += f" Priority funder ({', '.join(funder_matches[:2])}) with established relevance to the mission."
+
+    if "University center" in persona:
+        explanation += " Appears suited to a university-research model."
+    elif "Applied analytics" in persona:
+        explanation += " Fits the applied analytics and monitoring capability."
+    elif "Think tank" in persona:
+        explanation += " Matches policy analysis and strategic assessment capacity."
+
+    return explanation
+
+
+def generate_why_might_fail(eligibility: int, feasibility: int, text: str, opp_type: str) -> str:
+    """Generate specific, skeptical risk assessment."""
+    text_lower = text.lower()
+    opp_lower = opp_type.lower()
+    risks = []
+
+    if any(kw in text_lower for kw in ["prototype", "hardware", "manufacturing",
+                                        "test range", "flight test"]):
+        risks.append("Appears heavily oriented toward hardware prototyping beyond this institute's standalone capacity.")
+    if any(kw in text_lower for kw in ["ts/sci", "top secret", "scif", "classified"]):
+        risks.append("Likely favors performers with classified infrastructure or prior DoD technical past performance.")
+    if SMALL_BUSINESS_ONLY.search(text):
+        risks.append("Small-business eligibility restriction suggests this is only viable through a startup partner.")
+    if "contract" in opp_lower and "research" not in text_lower:
+        risks.append("Service-type contract language may favor established defense contractors.")
+    if any(kw in text_lower for kw in ["past performance", "prior contract", "cage code"]):
+        risks.append("Likely requires significant past performance documentation that newer centers may lack.")
+    if feasibility <= 2:
+        risks.append("High competition level and technical demands may reduce capture probability.")
+    if eligibility <= 2:
+        risks.append("Eligibility constraints may prevent direct participation; teaming likely required.")
+
+    if not risks:
+        if opp_lower in ("contract", "solicitation"):
+            risks.append("Contract vehicle may favor incumbents or performers with established government relationships.")
+        else:
+            risks.append("Review full solicitation to confirm eligibility and evaluation criteria alignment.")
+
+    return " ".join(risks[:2])
+
+
+def generate_concept_angle(matched_kw: list, text: str) -> str:
+    """Generate a short, credible concept angle."""
+    text_lower = text.lower()
+    topics = [kw.lower() for kw in matched_kw if not kw.startswith("[FUNDER]")]
+
+    angles = {
+        "taiwan": "OSINT-enabled monitoring of gray-zone coercion and military signaling in the Taiwan Strait",
+        "disinformation": "AI-assisted detection of coordinated narrative warfare campaigns targeting democratic institutions",
+        "cognitive warfare": "Mapping cognitive warfare vectors and building institutional resilience frameworks",
+        "wargaming": "Scenario-based wargaming of crisis escalation and democratic response under information attack",
+        "information operations": "Systematic analysis of state-directed information operations and counter-strategy development",
+        "deterrence": "Strategic-warning analytics for Indo-Pacific crisis instability and deterrence signaling",
+        "osint": "Open-source intelligence workflows for real-time strategic monitoring and decision support",
+        "cybersecurity": "Cyber policy and critical infrastructure vulnerability assessment with policy recommendations",
+        "indo-pacific": "Alliance resilience and strategic competition analysis across the Indo-Pacific theater",
+        "gray zone": "Sub-threshold competition monitoring and gray-zone response framework development",
+        "missile defense": "Defense technology assessment and force posture analysis for emerging threat environments",
+        "autonomous": "Policy frameworks for autonomous systems integration and AI-enabled security analysis",
+        "counterterrorism": "Threat assessment and counter-network analysis for terrorism and transnational security",
+        "counternarcotics": "Data-driven analysis of illicit networks and transnational organized crime disruption",
+        "maritime": "Maritime coercion and alliance response modeling in contested littoral environments",
+        "nuclear": "Nuclear posture assessment and arms control verification in the great-power competition context",
+        "supply chain": "Supply-chain and research-security vulnerability mapping for critical technologies",
+        "ai": "Human-centered AI governance and AI-enabled analysis for national security decision-making",
+    }
+
+    for topic in topics[:5]:
+        for key, angle in angles.items():
+            if key in topic:
+                return angle
+
+    # Fallback based on text content
+    if "alliance" in text_lower or "partner" in text_lower:
+        return "Alliance resilience analysis and partner-capacity assessment for strategic competition"
+    if "innovation" in text_lower or "technology" in text_lower:
+        return "Emerging technology assessment and defense innovation policy analysis"
+    return "Strategic studies research with policy-relevant analytical deliverables"
+
+
+def generate_suggested_partners(text: str, opp_type: str, feasibility: int) -> str:
+    """Suggest plausible partner types."""
+    text_lower = text.lower()
+    partners = []
+
+    if any(kw in text_lower for kw in ["AI", "machine learning", "data", "analytics", "algorithm"]):
+        partners.append("AI/ML contractor or university CS department")
+    if any(kw in text_lower for kw in ["cyber", "network", "infrastructure"]):
+        partners.append("Cybersecurity lab or university cyber center")
+    if any(kw in text_lower for kw in ["prototype", "hardware", "systems", "engineering"]):
+        partners.append("Applied physics lab or engineering school")
+    if any(kw in text_lower for kw in ["wargaming", "simulation", "modeling"]):
+        partners.append("Wargaming/design contractor or war college")
+    if any(kw in text_lower for kw in ["maritime", "naval", "undersea"]):
+        partners.append("Maritime analytics shop or naval research partner")
+    if any(kw in text_lower for kw in ["survey", "public opinion", "polling"]):
+        partners.append("Polling/survey research group")
+    if any(kw in text_lower for kw in ["democracy", "governance", "resilience", "civil society"]):
+        partners.append("Democracy/resilience nonprofit organization")
+    if any(kw in text_lower for kw in ["area studies", "regional", "language"]):
+        partners.append("Regional studies center or area-studies faculty")
+    if feasibility <= 2:
+        partners.append("Federally connected research center with past performance")
+
+    return "; ".join(partners[:3]) if partners else "University PI team or policy research partner"
 
 
 def match_org_projects(title: str, description: str, matched_kw: list) -> str:
@@ -455,41 +806,6 @@ def match_org_projects(title: str, description: str, matched_kw: list) -> str:
         if any(_kw_in_text(w, combined) for w in words):
             matches.append(proj_name)
     return "; ".join(matches[:4]) if matches else ""
-
-
-def generate_explanation(score: int, matched_kw: list, funder: str) -> str:
-    """Generate plain-English explanation of why this fits."""
-    if score >= 80:
-        fit = "Strong direct fit"
-    elif score >= 60:
-        fit = "Good fit"
-    elif score >= 40:
-        fit = "Moderate fit"
-    elif score >= 20:
-        fit = "Possible fit"
-    else:
-        fit = "Tangential"
-
-    topics = [kw for kw in matched_kw if not kw.startswith("[FUNDER]")][:5]
-    funder_matches = [kw.replace("[FUNDER]", "") for kw in matched_kw if kw.startswith("[FUNDER]")]
-
-    parts = [fit]
-    if topics:
-        parts.append(f"matches on: {', '.join(topics)}")
-    if funder_matches:
-        parts.append(f"priority funder: {', '.join(funder_matches)}")
-    return " — ".join(parts)
-
-
-def generate_next_step(score: int, opp_type: str, deadline: str) -> str:
-    """Recommend next step based on score and urgency."""
-    if score >= 70:
-        return "HIGH PRIORITY: Review full solicitation immediately, draft concept note"
-    if score >= 50:
-        return "Review solicitation, assess eligibility, prepare concept note"
-    if score >= 30:
-        return "Review listing for fit, consider for future cycles"
-    return "Track for reference"
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1505,20 +1821,29 @@ def deduplicate(opps: list) -> list:
 # EXCEL EXPORT — clean columns, no empties
 # ═══════════════════════════════════════════════════════════
 EXCEL_COLUMNS = [
-    ("title", "Opportunity Title", 50),
-    ("funder", "Funder", 28),
+    ("title", "Opportunity Title", 48),
+    ("funder", "Agency / Funder", 26),
+    ("sub_agency", "Office / Program", 22),
     ("opp_type", "Type", 16),
-    ("fit_score", "Fit Score", 9),
-    ("explanation", "Why This Fits", 55),
-    ("what_looking_for", "What They're Looking For", 50),
-    ("tsm_project_match", "Relevant Programs", 38),
-    ("synopsis", "Synopsis", 55),
-    ("amount", "Award Amount", 18),
+    ("status", "Status", 12),
+    ("total_score", "Total Score", 10),
+    ("mission_fit", "Mission Fit (1-5)", 10),
+    ("eligibility_fit", "Eligibility (1-5)", 10),
+    ("feasibility", "Feasibility (1-5)", 10),
+    ("strategic_value", "Strategic Value (1-5)", 10),
+    ("persona", "Best Persona", 22),
+    ("mode", "Recommended Mode", 22),
+    ("why_fits", "Why It Fits", 55),
+    ("why_might_fail", "Why It Might Fail", 45),
+    ("concept_angle", "Concept Note Angle", 50),
+    ("suggested_partners", "Suggested Partners", 35),
+    ("project_match", "Relevant Programs", 35),
+    ("synopsis", "Synopsis", 50),
+    ("amount", "Funding / Range", 18),
     ("deadline", "Deadline", 14),
-    ("next_step", "Recommended Next Step", 40),
-    ("url", "Link", 40),
-    ("source", "Source", 16),
-    ("keywords_matched", "Keywords Matched", 40),
+    ("url", "Official Link", 40),
+    ("source", "Source Portal", 14),
+    ("keywords_matched", "Key Topics / Tags", 38),
 ]
 
 HEADER_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
@@ -1542,57 +1867,42 @@ def export_excel(rows: list, stats: dict, output_dir: Path) -> str:
 
     wb = Workbook()
 
-    # ── Sheet 1: All Opportunities ──
+    # ── Sheet 1: Pursue Now (Prime directly or Prime through university) ──
     ws = wb.active
-    ws.title = "All Opportunities"
-    _write_sheet(ws, rows)
+    ws.title = "Pursue Now"
+    pursue_rows = [r for r in rows if r.get("mode", "").startswith("Prime")]
+    _write_sheet(ws, pursue_rows)
 
-    # ── Sheet 2: Top Fit (score >= 40) ──
-    top_rows = [r for r in rows if r["fit_score"] >= 40]
-    ws2 = wb.create_sheet("Top Fit (Score 40+)")
-    _write_sheet(ws2, top_rows)
+    # ── Sheet 2: Pursue with Partner (Sub, Team) ──
+    ws2 = wb.create_sheet("Pursue with Partner")
+    partner_rows = [r for r in rows if r.get("mode", "") in ("Join as subawardee", "Team with technical partner")]
+    _write_sheet(ws2, partner_rows)
 
-    # ── Sheet 3: Federal (Grants.gov + SAM.gov) ──
+    # ── Sheet 3: Monitor (Track for future cycle) ──
+    ws3 = wb.create_sheet("Monitor")
+    monitor_rows = [r for r in rows if r.get("mode", "") == "Track for future cycle"]
+    _write_sheet(ws3, monitor_rows)
+
+    # ── Sheet 4: All Opportunities ──
+    ws4 = wb.create_sheet("All Opportunities")
+    _write_sheet(ws4, rows)
+
+    # ── Sheet 5: Federal (Grants.gov + SAM.gov) ──
     fed_rows = [r for r in rows if r["source"] in ("Grants.gov", "SAM.gov")]
-    ws3 = wb.create_sheet("Federal")
-    _write_sheet(ws3, fed_rows)
+    ws5 = wb.create_sheet("Federal")
+    _write_sheet(ws5, fed_rows)
 
-    # ── Sheet 4: Foundations ──
+    # ── Sheet 6: Foundations & Think Tanks ──
     found_rows = [r for r in rows if "Foundation" in r.get("opp_type", "") or "Fellowship" in r.get("opp_type", "")
-                  or r["source"] not in ("Grants.gov", "SAM.gov", "NSF Awards")]
-    ws4 = wb.create_sheet("Foundations & Think Tanks")
-    _write_sheet(ws4, found_rows)
+                  or r["source"] not in ("Grants.gov", "SAM.gov", "NSF Funding")]
+    ws6 = wb.create_sheet("Foundations & Think Tanks")
+    _write_sheet(ws6, found_rows)
 
-    # ── Sheet 5: NSF Funding ──
-    nsf_rows = [r for r in rows if r["source"] == "NSF Funding"]
-    ws5 = wb.create_sheet("NSF Funding")
-    _write_sheet(ws5, nsf_rows)
-
-    # ── Sheet 6: Run Summary ──
-    ws6 = wb.create_sheet("Run Summary")
-    ws6.column_dimensions["A"].width = 30
-    ws6.column_dimensions["B"].width = 50
-    summary = [
-        ("Agent Geronimo Run Summary", ""),
-        ("Date", datetime.now().strftime("%Y-%m-%d %H:%M")),
-        ("Total Raw", stats.get("raw", 0)),
-        ("After Dedup", stats.get("deduped", 0)),
-        ("Scored >= 40 (strong fit)", stats.get("strong", 0)),
-        ("Scored >= 20 (possible fit)", stats.get("possible", 0)),
-        ("Grants.gov results", stats.get("grants_gov", 0)),
-        ("SAM.gov results", stats.get("sam_gov", 0)),
-        ("NSF Funding results", stats.get("nsf", 0)),
-        ("Web source results", stats.get("web", 0)),
-        ("", ""),
-        ("Notes", ""),
-        ("Scores are keyword-based (0-100), not absolute quality", ""),
-        ("All URLs verified live — dead links removed", ""),
-        ("Deadlines may change — always check the original listing", ""),
-        ("Already-awarded grants excluded unless external funding available", ""),
-    ]
-    for i, (a, b) in enumerate(summary, 1):
-        ws6.cell(row=i, column=1, value=a).font = Font(bold=True) if a and not a.startswith("-") else Font()
-        ws6.cell(row=i, column=2, value=str(b))
+    # ── Sheet 7: Executive Summary ──
+    ws7 = wb.create_sheet("Executive Summary")
+    ws7.column_dimensions["A"].width = 40
+    ws7.column_dimensions["B"].width = 60
+    _write_executive_summary(ws7, rows, stats)
 
     wb.save(filepath)
     return str(filepath)
@@ -1626,14 +1936,14 @@ def _write_sheet(ws, rows):
             except Exception:
                 pass
 
-        # Color by score
-        score = row.get("fit_score", 0)
+        # Color by mode
+        mode = row.get("mode", "")
         fill = None
-        if score >= 60:
+        if mode.startswith("Prime"):
             fill = GREEN_FILL
-        elif score >= 40:
+        elif mode in ("Join as subawardee", "Team with technical partner"):
             fill = YELLOW_FILL
-        elif score >= 20:
+        elif mode == "Track for future cycle":
             fill = ORANGE_FILL
         if fill:
             for ci in range(1, len(EXCEL_COLUMNS) + 1):
@@ -1644,6 +1954,86 @@ def _write_sheet(ws, rows):
         ws.auto_filter.ref = ws.dimensions
 
 
+def _write_executive_summary(ws, rows: list, stats: dict):
+    """Write executive summary sheet with top priorities and landscape analysis."""
+    bold = Font(bold=True, size=11)
+    header = Font(bold=True, size=13, color="1F4E79")
+
+    r = 1
+    ws.cell(row=r, column=1, value="AGENT GERONIMO v4 — EXECUTIVE SUMMARY").font = header
+    r += 1
+    ws.cell(row=r, column=1, value=f"Generated: {datetime.now():%Y-%m-%d %H:%M}").font = Font(italic=True)
+    r += 2
+
+    # Pipeline overview
+    ws.cell(row=r, column=1, value="Pipeline Overview").font = bold
+    r += 1
+    pursue_now = [x for x in rows if x.get("mode", "").startswith("Prime")]
+    pursue_partner = [x for x in rows if x.get("mode", "") in ("Join as subawardee", "Team with technical partner")]
+    monitor = [x for x in rows if x.get("mode", "") == "Track for future cycle"]
+    overview = [
+        ("Total raw opportunities scraped", stats.get("raw", 0)),
+        ("After deduplication", stats.get("deduped", 0)),
+        ("After hard filters + scoring", len(rows)),
+        ("Pursue Now (Prime)", len(pursue_now)),
+        ("Pursue with Partner (Sub/Team)", len(pursue_partner)),
+        ("Monitor (Track)", len(monitor)),
+        ("Grants.gov results", stats.get("grants_gov", 0)),
+        ("SAM.gov results", stats.get("sam_gov", 0)),
+        ("NSF Funding results", stats.get("nsf", 0)),
+        ("Web source results", stats.get("web", 0)),
+    ]
+    for label, val in overview:
+        ws.cell(row=r, column=1, value=label)
+        ws.cell(row=r, column=2, value=str(val))
+        r += 1
+    r += 1
+
+    # Top 10 priorities
+    ws.cell(row=r, column=1, value="Top 10 Priorities").font = bold
+    r += 1
+    for i, row in enumerate(pursue_now[:10], 1):
+        ws.cell(row=r, column=1, value=f"{i}. {row['title'][:80]}")
+        ws.cell(row=r, column=2, value=f"{row['funder']} | {row.get('mode','')} | Score: {row.get('total_score','')}")
+        r += 1
+    r += 1
+
+    # Top 5 partnership opportunities
+    ws.cell(row=r, column=1, value="Top 5 Partnership Opportunities").font = bold
+    r += 1
+    for i, row in enumerate(pursue_partner[:5], 1):
+        ws.cell(row=r, column=1, value=f"{i}. {row['title'][:80]}")
+        ws.cell(row=r, column=2, value=f"{row['funder']} | Partners: {row.get('suggested_partners','')[:60]}")
+        r += 1
+    r += 1
+
+    # Agencies to watch
+    ws.cell(row=r, column=1, value="Top Funders by Volume").font = bold
+    r += 1
+    from collections import Counter
+    funder_counts = Counter(row["funder"] for row in rows)
+    for funder, count in funder_counts.most_common(10):
+        ws.cell(row=r, column=1, value=funder)
+        ws.cell(row=r, column=2, value=f"{count} opportunities")
+        r += 1
+    r += 1
+
+    # Notes
+    ws.cell(row=r, column=1, value="Notes").font = bold
+    r += 1
+    notes = [
+        "Scores are multi-dimensional (Mission Fit, Eligibility, Feasibility, Strategic Value) — each 1-5.",
+        "Total Score = 0.35*Mission + 0.25*Eligibility + 0.20*Feasibility + 0.20*Strategic.",
+        "All URLs verified live — dead links removed before export.",
+        "Hard filters excluded biomedical, construction, janitorial, and other clearly irrelevant categories.",
+        "Small-business set-aside opportunities flagged — may require teaming with SB partner.",
+        "Deadlines may change — always check the original listing.",
+    ]
+    for note in notes:
+        ws.cell(row=r, column=1, value=note)
+        r += 1
+
+
 # ═══════════════════════════════════════════════════════════
 # MAIN PIPELINE
 # ═══════════════════════════════════════════════════════════
@@ -1651,8 +2041,8 @@ def _write_sheet(ws, rows):
 @click.option("--fresh", is_flag=True, help="Clear cache before running")
 def main(fresh: bool):
     console.print(Panel(
-        "[bold cyan]AGENT GERONIMO v3[/bold cyan]\n"
-        "[dim]Exhaustive Funding Opportunity Discovery[/dim]",
+        "[bold cyan]AGENT GERONIMO v4[/bold cyan]\n"
+        "[dim]Strategic Federal Opportunity Discovery & Triage[/dim]",
         border_style="cyan",
     ))
 
@@ -1686,15 +2076,23 @@ def main(fresh: bool):
     stats["deduped"] = len(opps)
     console.print(f"  {stats['raw']} → [green]{stats['deduped']}[/green] unique")
 
-    # Stage 3: Score + enrich
-    console.print("\n[bold]Stage 3: Score & Enrich[/bold]")
+    # Stage 3: Hard Filter + Score + Enrich
+    console.print("\n[bold]Stage 3: Filter, Score & Enrich[/bold]")
     local_kw = load_local_context()
     if local_kw:
         console.print(f"  Local TSM context: {len(local_kw)} keywords from TSM!!! folder")
 
     scored_rows = []
+    filtered_out = 0
     today = datetime.now()
     for opp in opps:
+        title = opp.get("title", "")
+        desc = opp.get("description", "")
+        funder = opp.get("funder", "")
+        opp_type = opp.get("opp_type", "")
+        amount = opp.get("amount", "")
+        combined_text = f"{title} {desc}".lower()
+
         # Skip opportunities with deadlines that have already passed
         dl = opp.get("deadline", "")
         if dl and dl not in ("See listing", "See website", "See solicitation", "Ongoing", "TBD", "Rolling", ""):
@@ -1705,52 +2103,83 @@ def main(fresh: bool):
             except ValueError:
                 pass  # unparseable deadline — keep it
 
-        score, matched = score_opp(opp["title"], opp.get("description", ""),
-                                    opp["funder"], opp.get("opp_type", ""))
-        if score < 10:
-            continue  # filter noise
+        # Hard filter: exclude clearly irrelevant opportunities
+        if HARD_EXCLUDE_PATTERNS.search(combined_text):
+            filtered_out += 1
+            continue
 
-        proj_match = match_org_projects(opp["title"], opp.get("description", ""), matched)
-        if not proj_match:
-            proj_match = "General relevance — review for fit"
-        explanation = generate_explanation(score, matched, opp["funder"])
-        next_step = generate_next_step(score, opp.get("opp_type", ""), opp.get("deadline", ""))
+        # Multi-dimensional scoring
+        matched = []
+        mission = score_mission_fit(combined_text, matched)
+        eligibility = score_eligibility_fit(combined_text, opp_type, funder)
+        feasibility = score_feasibility(combined_text, opp_type, amount)
+        strategic = score_strategic_value(combined_text, amount, funder)
+        total = compute_total_score(mission, eligibility, feasibility, strategic)
 
-        # Build "what they're looking for" from description
-        desc = opp.get("description", "")
-        what_looking_for = desc[:300].strip() if desc else f"{opp['funder']} — see listing for details"
+        # Skip very low relevance (mission 1 = no keyword hits at all)
+        if mission <= 1 and not any(f.lower() in funder.lower() for f in PRIORITY_FUNDERS[:20]):
+            filtered_out += 1
+            continue
+
+        # Classify
+        persona = determine_persona(combined_text, opp_type)
+        mode = determine_mode(mission, eligibility, feasibility, combined_text, opp_type)
+
+        # Skip discards
+        if mode == "Discard":
+            filtered_out += 1
+            continue
+
+        # Generate analytical fields
+        why_fits = generate_why_fits(matched, funder, mission, persona)
+        why_might_fail = generate_why_might_fail(eligibility, feasibility, combined_text, opp_type)
+        concept_angle = generate_concept_angle(matched, combined_text)
+        suggested_partners = generate_suggested_partners(combined_text, opp_type, feasibility)
+        proj_match = match_org_projects(title, desc, matched)
 
         scored_rows.append({
-            "title": opp["title"],
-            "funder": opp["funder"],
-            "opp_type": opp.get("opp_type", ""),
-            "fit_score": score,
-            "explanation": explanation,
-            "what_looking_for": what_looking_for,
-            "tsm_project_match": proj_match,
+            "title": title,
+            "funder": funder,
+            "sub_agency": "",  # SAM.gov populates this; others left blank
+            "opp_type": opp_type,
+            "status": "Active",
+            "total_score": total,
+            "mission_fit": mission,
+            "eligibility_fit": eligibility,
+            "feasibility": feasibility,
+            "strategic_value": strategic,
+            "persona": persona,
+            "mode": mode,
+            "why_fits": why_fits,
+            "why_might_fail": why_might_fail,
+            "concept_angle": concept_angle,
+            "suggested_partners": suggested_partners,
+            "project_match": proj_match if proj_match else "General relevance — review for fit",
             "synopsis": desc[:500] if desc else "See listing",
-            "amount": opp.get("amount", "") or "See listing",
-            "deadline": opp.get("deadline", "") or "See listing",
-            "next_step": next_step,
+            "amount": amount or "See listing",
+            "deadline": dl or "See listing",
             "url": opp.get("url", ""),
             "source": opp.get("source", ""),
-            "keywords_matched": ", ".join(matched[:8]),
+            "keywords_matched": ", ".join([k for k in matched if not k.startswith("[FUNDER]")][:8]),
         })
 
-    # Sort by score desc
-    scored_rows.sort(key=lambda r: r["fit_score"], reverse=True)
+    # Sort by total score descending, then mission fit
+    scored_rows.sort(key=lambda r: (r["total_score"], r["mission_fit"]), reverse=True)
 
-    console.print(f"  Scored: [green]{len(scored_rows)}[/green] opportunities (filtered noise)")
+    console.print(f"  Hard-filtered: [red]{filtered_out}[/red] irrelevant")
+    console.print(f"  Scored & enriched: [green]{len(scored_rows)}[/green] opportunities")
 
     # Stage 3b: URL Verification — remove dead links
     console.print("\n[bold]Stage 3b: URL Verification[/bold]")
     scored_rows = verify_all_urls(scored_rows)
 
-    stats["strong"] = sum(1 for r in scored_rows if r["fit_score"] >= 40)
-    stats["possible"] = sum(1 for r in scored_rows if r["fit_score"] >= 20)
+    pursue_count = sum(1 for r in scored_rows if r["mode"].startswith("Prime"))
+    partner_count = sum(1 for r in scored_rows if r["mode"] in ("Join as subawardee", "Team with technical partner"))
+    monitor_count = sum(1 for r in scored_rows if r["mode"] == "Track for future cycle")
 
-    console.print(f"  Strong fit (≥40): [green]{stats['strong']}[/green]")
-    console.print(f"  Possible fit (≥20): [yellow]{stats['possible']}[/yellow]")
+    console.print(f"  Pursue Now: [green]{pursue_count}[/green]")
+    console.print(f"  Pursue w/ Partner: [yellow]{partner_count}[/yellow]")
+    console.print(f"  Monitor: [dim]{monitor_count}[/dim]")
 
     # Stage 4: Export
     console.print("\n[bold]Stage 4: Export[/bold]")
@@ -1773,13 +2202,14 @@ def main(fresh: bool):
     # Summary
     console.print(f"""
 {'='*60}
-  AGENT GERONIMO v3 — COMPLETE
+  AGENT GERONIMO v4 — COMPLETE
 {'='*60}
   Raw opportunities:    {stats['raw']}
   After dedup:          {stats['deduped']}
   After scoring:        {len(scored_rows)}
-  Strong fit (≥40):     {stats['strong']}
-  Possible fit (≥20):   {stats['possible']}
+  Pursue Now:           {pursue_count}
+  Pursue w/ Partner:    {partner_count}
+  Monitor:              {monitor_count}
   Grants.gov:           {stats['grants_gov']}
   SAM.gov:              {stats['sam_gov']}
   NSF Funding:          {stats['nsf']}
@@ -1789,15 +2219,19 @@ def main(fresh: bool):
 
     # Top opportunities table
     table = Table(title="Top 20 Opportunities")
-    table.add_column("Score", width=6, style="bold")
-    table.add_column("Title", width=48)
-    table.add_column("Funder", width=24)
-    table.add_column("Amount", width=16)
+    table.add_column("Score", width=5, style="bold")
+    table.add_column("Title", width=44)
+    table.add_column("Funder", width=22)
+    table.add_column("Mode", width=20)
+    table.add_column("Mission", width=7)
     table.add_column("Source", width=12)
     for r in scored_rows[:20]:
-        style = "green" if r["fit_score"] >= 60 else "yellow" if r["fit_score"] >= 40 else "dim"
-        table.add_row(str(r["fit_score"]), r["title"][:48], r["funder"][:24],
-                       r["amount"][:16], r["source"][:12], style=style)
+        mode = r.get("mode", "")
+        style = "green" if mode.startswith("Prime") else "yellow" if "sub" in mode.lower() or "team" in mode.lower() else "dim"
+        table.add_row(
+            str(r["total_score"]), r["title"][:44], r["funder"][:22],
+            mode[:20], str(r["mission_fit"]), r["source"][:12], style=style,
+        )
     console.print(table)
 
 
